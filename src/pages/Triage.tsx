@@ -82,23 +82,57 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     }
   };
 
-  const toggleRecording = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setInput("আমার বাচ্চার অনেক জ্বর আর সাথে মাথা ব্যথা।");
-      return;
-    }
+  const toggleRecording = async () => {
     if (isRecording) {
       recognitionRef.current?.stop();
       setIsRecording(false);
       return;
     }
+
+    // Step 1 — request mic permission explicitly
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+    } catch {
+      alert(lang === "bn"
+        ? "মাইক্রোফোন ব্যবহারের অনুমতি দিন। ব্রাউজার সেটিংস থেকে Allow করুন।"
+        : "Microphone access denied. Please allow it in your browser settings.");
+      return;
+    }
+
+    // Step 2 — check browser support (all vendor prefixes)
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition ||
+      (window as any).mozSpeechRecognition ||
+      (window as any).msSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert(lang === "bn"
+        ? "আপনার ব্রাউজার ভয়েস সাপোর্ট করে না। Chrome বা Safari ব্যবহার করুন।"
+        : "Voice not supported in this browser. Please use Chrome or Safari.");
+      return;
+    }
+
+    // Step 3 — start recognition
     const recognition = new SpeechRecognition();
     recognition.lang = lang === "bn" ? "bn-BD" : "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.onresult = (e: any) => { setInput(e.results[0][0].transcript); setIsRecording(false); };
-    recognition.onerror = () => setIsRecording(false);
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (e: any) => {
+      setInput(e.results[0][0].transcript);
+      setIsRecording(false);
+    };
+    recognition.onerror = (e: any) => {
+      if (e.error === "not-allowed") {
+        alert(lang === "bn"
+          ? "মাইক্রোফোন ব্লক করা আছে। সেটিংস থেকে Allow করুন।"
+          : "Microphone blocked. Allow it in browser settings.");
+      }
+      setIsRecording(false);
+    };
     recognition.onend = () => setIsRecording(false);
     recognitionRef.current = recognition;
     recognition.start();

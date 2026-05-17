@@ -63,18 +63,39 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
 
       {/* Upload area */}
       {!preview ? (
-        <div className="aspect-[4/3] w-full border-2 border-dashed border-emerald-200 rounded-3xl flex flex-col items-center justify-center bg-emerald-50/50 gap-5">
+        <div className="w-full border-2 border-dashed border-emerald-200 rounded-3xl flex flex-col items-center justify-center bg-emerald-50/50 gap-4 py-10 px-6">
           <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center">
             <Camera size={32} className="text-emerald-500" />
           </div>
-          <div className="text-center space-y-2">
-            <p className="text-sm font-medium text-gray-600">{lang === "bn" ? "প্রেসক্রিপশন বা টেস্ট রিপোর্টের ছবি তুলুন" : "Take a photo of prescription or test report"}</p>
-            <label className="inline-block bg-emerald-600 text-white px-7 py-3 rounded-xl font-bold cursor-pointer shadow-lg shadow-emerald-200 active:scale-95 transition-all text-sm">
-              {t("scan.btn.select")}
-              <input type="file" className="hidden" accept="image/*" capture="environment" onChange={handleFileChange} />
-            </label>
-            <p className="text-xs text-gray-400">{lang === "bn" ? "ফাইল থেকেও বেছে নিতে পারেন" : "or choose from gallery"}</p>
-          </div>
+          <p className="text-sm font-medium text-gray-600 text-center">
+            {lang === "bn" ? "প্রেসক্রিপশন বা টেস্ট রিপোর্ট আপলোড করুন" : "Upload prescription or test report"}
+          </p>
+          {/* Take photo with camera */}
+          <label className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white py-3.5 rounded-xl font-bold cursor-pointer shadow-lg shadow-emerald-200 active:scale-95 transition-all text-sm">
+            <Camera size={16} />
+            {lang === "bn" ? "ক্যামেরা দিয়ে তুলুন" : "Take Photo"}
+            <input
+              type="file"
+              className="hidden"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+            />
+          </label>
+          {/* Choose from gallery / storage */}
+          <label className="w-full flex items-center justify-center gap-2 bg-white border-2 border-emerald-200 text-emerald-700 py-3.5 rounded-xl font-bold cursor-pointer active:scale-95 transition-all text-sm">
+            <FileText size={16} />
+            {lang === "bn" ? "গ্যালারি থেকে বেছে নিন" : "Choose from Gallery"}
+            <input
+              type="file"
+              className="hidden"
+              accept="image/*,application/pdf"
+              onChange={handleFileChange}
+            />
+          </label>
+          <p className="text-[10px] text-gray-400 text-center">
+            {lang === "bn" ? "JPG, PNG বা PDF সাপোর্টেড" : "JPG, PNG or PDF supported"}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
