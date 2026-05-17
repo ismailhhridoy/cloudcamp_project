@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Information about the patient",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "district": { "type": "string" }
+      },
+      "required": ["uid", "name"]
+    },
+    "Prescription": {
+      "title": "Prescription",
+      "description": "Scanned prescription data",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "bmdc": { "type": "string" },
+        "medicines": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "scannedAt": { "type": "string", "format": "date-time" },
+        "confidence": { "type": "number" }
+      }
+    },
+    "Doctor": {
+      "title": "Doctor",
+      "description": "Verified doctor registry",
+      "type": "object",
+      "properties": {
+        "bmdc": { "type": "string" },
+        "name": { "type": "string" },
+        "hospital": { "type": "string" },
+        "rating_avg": { "type": "number" },
+        "rating_count": { "type": "number" },
+        "legibility_score": { "type": "number" }
+      }
+    },
+    "SymptomLog": {
+      "title": "SymptomLog",
+      "description": "History of symptom triages",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "symptoms": { "type": "string" },
+        "verdict": { "type": "string" },
+        "district": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/patients/{userId}": {
+      "schema": "Patient",
+      "description": "Patient profiles"
+    },
+    "/prescriptions/{id}": {
+      "schema": "Prescription",
+      "description": "Scanned prescriptions"
+    },
+    "/doctors/{bmdc}": {
+      "schema": "Doctor",
+      "description": "Doctor registry"
+    },
+    "/symptom_logs/{id}": {
+      "schema": "SymptomLog",
+      "description": "Historical symptom data for heatmaps"
+    }
+  }
+}

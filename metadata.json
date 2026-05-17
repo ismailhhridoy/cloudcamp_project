@@ -1,0 +1,12 @@
+{
+  "name": "ShasthyoAI",
+  "description": "Your AI health companion for rural Bangladesh. Providing voice-first symptom triage, prescription reading, and a verified doctor registry to bridge the healthcare gap in rural areas.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
