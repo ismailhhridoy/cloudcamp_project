@@ -31,10 +31,10 @@ export function DashboardPage() {
   const highSeverity = DISEASE_DATA.filter(d => d.severity === "high").length;
 
   return (
-    <div className="flex flex-col bg-gray-50 pb-24">
+    <div className="flex flex-col bg-gray-50 pb-24 lg:max-w-6xl lg:mx-auto lg:w-full">
 
       {/* Ministry header */}
-      <div className="bg-emerald-900 px-4 pt-4 pb-6">
+      <div className="bg-emerald-900 px-4 lg:px-8 pt-4 lg:pt-8 pb-6 lg:rounded-3xl lg:mt-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
             <Shield size={22} className="text-emerald-300" />
@@ -63,8 +63,8 @@ export function DashboardPage() {
       </div>
 
       {/* Toggle tabs */}
-      <div className="px-4 -mt-3">
-        <div className="bg-white rounded-2xl p-1 flex shadow-sm border border-gray-100">
+      <div className="px-4 lg:px-8 -mt-3">
+        <div className="bg-white rounded-2xl p-1 flex shadow-sm border border-gray-100 lg:max-w-md">
           <button onClick={() => setActiveView("disease")}
             className={cn("flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
               activeView === "disease" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-500")}>
@@ -78,7 +78,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 lg:px-8 space-y-4">
         {activeView === "disease" ? (
           <>
             {/* Alert banner */}
@@ -130,7 +130,7 @@ export function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-3">
                 {DISEASE_DATA.sort((a, b) => b.cases - a.cases).map((d, i) => (
                   <div key={i} className="bg-white rounded-xl border border-gray-100 p-3 flex items-center gap-3 shadow-sm">
                     <div className="w-2 h-10 rounded-full shrink-0" style={{ backgroundColor: d.color }} />

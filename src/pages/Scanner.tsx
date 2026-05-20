@@ -55,9 +55,9 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
   };
 
   return (
-    <div className="p-4 space-y-5 pb-24">
-      <div className="text-center space-y-1">
-        <h2 className="text-xl font-bold text-gray-900">{t("scan.title")}</h2>
+    <div className="p-4 lg:p-8 space-y-5 pb-24 lg:max-w-3xl lg:mx-auto">
+      <div className="text-center lg:text-left space-y-1">
+        <h2 className="text-xl lg:text-3xl font-bold text-gray-900">{t("scan.title")}</h2>
         <p className="text-sm text-gray-500">{t("scan.subtitle")}</p>
       </div>
 

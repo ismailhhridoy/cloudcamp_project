@@ -6,7 +6,7 @@ import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { User } from "firebase/auth";
 
-interface Message { role: "user" | "assistant"; content: string; }
+interface Message { role: "user" | "assistant"; content: string; safety?: { verdict: string; matched: string[]; scrubbedLines?: number }; }
 interface OfflineRule { keywords: string[]; verdict: string; en: string; bn: string; }
 
 export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => void; user: User | null }) {
@@ -74,7 +74,7 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
         body: JSON.stringify({ message: userMessage, history: messages }),
       });
       const data = await response.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.text }]);
+      setMessages(prev => [...prev, { role: "assistant", content: data.text, safety: data.safety }]);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: checkOffline(userMessage) }]);
     } finally {
@@ -140,7 +140,7 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full lg:max-w-3xl lg:mx-auto lg:w-full lg:my-6 lg:rounded-3xl lg:overflow-hidden lg:shadow-xl lg:border lg:border-gray-100 lg:bg-white lg:min-h-[80vh]">
       {/* Offline banner */}
       <AnimatePresence>
         {isOffline && (
@@ -203,7 +203,7 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
       )}
 
       {/* Input */}
-      <div className="p-4 pb-20 bg-white border-t border-gray-100 shadow-lg">
+      <div className="p-4 pb-20 lg:pb-4 bg-white border-t border-gray-100 shadow-lg">
         <div className="flex items-center gap-2">
           <motion.button whileTap={{ scale: 0.9 }} onClick={toggleRecording}
             className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg",
@@ -230,3 +230,4 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     </div>
   );
 }
+

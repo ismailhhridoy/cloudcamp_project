@@ -43,8 +43,8 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      <div className="p-4 bg-white border-b border-gray-100 sticky top-0 z-10 space-y-3">
+    <div className="flex flex-col h-full bg-gray-50 lg:max-w-6xl lg:mx-auto lg:w-full">
+      <div className="p-4 lg:p-6 bg-white border-b border-gray-100 sticky top-0 z-10 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -62,7 +62,7 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
         </div>
       </div>
 
-      <div className="p-4 space-y-3 overflow-y-auto pb-24">
+      <div className="p-4 lg:p-6 space-y-3 overflow-y-auto pb-24">
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
           {filtered.length} {t("doctors.found")}
         </p>
@@ -72,6 +72,7 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
             <p className="text-gray-400 text-sm">{lang === "bn" ? "কোনো ডাক্তার পাওয়া যায়নি" : "No doctors found"}</p>
           </div>
         )}
+        <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-4">
         {filtered.map((doc, i) => (
           <motion.div key={doc.bmdc} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
             className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
@@ -127,6 +128,7 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
             </div>
           </motion.div>
         ))}
+        </div>
       </div>
 
       {/* Rating modal */}
