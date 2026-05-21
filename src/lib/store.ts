@@ -2,13 +2,14 @@
 // Shape intentionally mimics Firestore semantics so it can be swapped for the real SDK later.
 
 import { useEffect, useState } from "react";
-import type { DoctorProfile, AuditSample, Certification } from "./types.ts";
+import type { DoctorProfile, AuditSample, Certification, LegibilityRecord } from "./types.ts";
 
 const DOCTORS_KEY = "shasthyo_doctors_v1";
 const AUDIT_SAMPLES_KEY = "shasthyo_audit_samples_v1";
 const CERTIFICATIONS_KEY = "shasthyo_certifications_v1";
 const DOCTOR_SESSION_KEY = "shasthyo_doctor_session_v1";
 const PATIENT_ID_KEY = "shasthyo_patient_id_v1";
+const LEGIBILITY_KEY = "shasthyo_legibility_v1";
 
 type Listener = () => void;
 const listeners: Map<string, Set<Listener>> = new Map();
@@ -122,6 +123,48 @@ export function latestCertification(): Certification | undefined {
   const all = listCertifications();
   if (all.length === 0) return undefined;
   return [...all].sort((a, b) => (a.signedAt < b.signedAt ? 1 : -1))[0];
+}
+
+// ── Doctor legibility (AI-scored handwriting quality, aggregated per BMDC) ──
+export function listLegibilityRecords(): LegibilityRecord[] {
+  return rawGet<LegibilityRecord[]>(LEGIBILITY_KEY, []);
+}
+
+export function getLegibilityForDoctor(bmdc: string): LegibilityRecord | undefined {
+  return listLegibilityRecords().find((r) => r.bmdc === bmdc);
+}
+
+// Record a fresh AI legibility score for a doctor. Aggregates running average.
+export function addLegibilityScore(bmdc: string, score: number, doctorName?: string, worstReason?: string): void {
+  if (!bmdc) return;
+  const all = listLegibilityRecords();
+  const idx = all.findIndex((r) => r.bmdc === bmdc);
+  if (idx < 0) {
+    all.push({
+      bmdc,
+      doctorName,
+      scoreSum: score,
+      scoreCount: 1,
+      avgScore: score,
+      worstReason,
+      lastUpdated: new Date().toISOString(),
+    });
+  } else {
+    const r = all[idx];
+    const sum = r.scoreSum + score;
+    const cnt = r.scoreCount + 1;
+    all[idx] = {
+      ...r,
+      doctorName: doctorName || r.doctorName,
+      scoreSum: sum,
+      scoreCount: cnt,
+      avgScore: Math.round((sum / cnt) * 10) / 10,
+      // Track the worst reason seen so the doctors list can surface it.
+      worstReason: score < (r.avgScore || 5) ? worstReason || r.worstReason : r.worstReason,
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+  rawSet(LEGIBILITY_KEY, all);
 }
 
 // ── Doctor session (mock auth) ──────────────────────────────────────────────
@@ -274,4 +317,5 @@ export const KEYS = {
   CERTIFICATIONS_KEY,
   DOCTOR_SESSION_KEY,
   PATIENT_ID_KEY,
+  LEGIBILITY_KEY,
 };

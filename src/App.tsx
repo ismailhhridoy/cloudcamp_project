@@ -13,12 +13,15 @@ import { DoctorsPage } from "./pages/Doctors.tsx";
 import { DashboardPage } from "./pages/Dashboard.tsx";
 import { CompliancePage } from "./pages/Compliance.tsx";
 import { DoctorPortal } from "./pages/DoctorPortal.tsx";
+import { SettingsPage } from "./pages/Settings.tsx";
 import { auth, signInWithGoogle } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { LogIn, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "./lib/LanguageContext.tsx";
 import { getConsent } from "./lib/consent.ts";
+import { autoLoadIfCached } from "./lib/llm.ts";
+import { autoLoadTfIfOptedIn } from "./lib/transformersEngine.ts";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
@@ -34,6 +37,10 @@ export default function App() {
       setLoading(false);
       if (u) setShowLoginModal(false);
     });
+    // Boot both offline engines in the background if the user has previously opted in. This way
+    // they're ready by the time the patient opens Triage — no extra click after a reload.
+    autoLoadIfCached();
+    autoLoadTfIfOptedIn();
     return () => unsubscribe();
   }, []);
 
@@ -70,6 +77,8 @@ export default function App() {
         return <CompliancePage />;
       case "doctor-portal":
         return <DoctorPortal />;
+      case "settings":
+        return <SettingsPage />;
       default:
         return <HomePage onNavigate={setActiveTab} />;
     }

@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Search, MapPin, Star, ShieldCheck, UserRound, Phone, ChevronRight, Award, AlertCircle } from "lucide-react";
+import { Search, MapPin, Star, ShieldCheck, UserRound, Phone, ChevronRight, Award, AlertCircle, PenLine } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { User } from "firebase/auth";
+import { useStore, KEYS } from "../lib/store.ts";
+import type { LegibilityRecord } from "../lib/types.ts";
 
 const DOCTORS = [
   { name: "Dr. Anisur Rahman", hospital: "Dhaka Medical College Hospital", bmdc: "A-54321", rating: 4.8, reviews: 156, verified: true, specialty: "General Medicine", phone: "+880-2-55165088", district: "Dhaka", scores: { explained: 4.9, respectful: 4.8, legible: 4.7, tests: 4.8 } },
@@ -14,13 +16,16 @@ const DOCTORS = [
   { name: "Dr. Nasrin Sultana", hospital: "Khulna Medical College", bmdc: "A-34567", rating: 4.6, reviews: 123, verified: true, specialty: "Dermatology", phone: "+880-41-731040", district: "Khulna", scores: { explained: 4.7, respectful: 4.8, legible: 4.4, tests: 4.5 } },
 ];
 
-const FILTERS = ["all", "nearby", "top", "gynecology", "pediatrics", "cardiology"];
+const FILTERS = ["all", "nearby", "top", "needs_training", "gynecology", "pediatrics", "cardiology"];
 
 export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => void; user: User | null }) {
   const { t, lang } = useLanguage();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<typeof DOCTORS[0] | null>(null);
+  const legibility = useStore<LegibilityRecord[]>(KEYS.LEGIBILITY_KEY, []);
+  const legibilityByBmdc = new Map(legibility.map((r) => [r.bmdc, r] as const));
+  const lookupLegibility = (bmdc: string) => legibilityByBmdc.get(bmdc);
 
   const filtered = DOCTORS.filter(d => {
     const matchSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -30,13 +35,26 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
       d.district.toLowerCase().includes(search.toLowerCase());
     if (filter === "all" || filter === "nearby") return matchSearch;
     if (filter === "top") return matchSearch && d.rating >= 4.5;
+    if (filter === "needs_training") {
+      const leg = lookupLegibility(d.bmdc);
+      return matchSearch && !!leg && leg.avgScore <= 2.5;
+    }
     return matchSearch && d.specialty.toLowerCase().includes(filter);
-  }).sort((a, b) => filter === "top" ? b.rating - a.rating : 0);
+  }).sort((a, b) => {
+    if (filter === "top") return b.rating - a.rating;
+    if (filter === "needs_training") {
+      const la = lookupLegibility(a.bmdc)?.avgScore ?? 99;
+      const lb = lookupLegibility(b.bmdc)?.avgScore ?? 99;
+      return la - lb;
+    }
+    return 0;
+  });
 
   const filterLabels: Record<string, { en: string; bn: string }> = {
     all: { en: "All", bn: "সব" },
     nearby: { en: "Nearby", bn: "কাছাকাছি" },
     top: { en: "Top Rated", bn: "শীর্ষ রেটেড" },
+    needs_training: { en: "Needs handwriting training", bn: "হাতের লেখা প্রশিক্ষণ প্রয়োজন" },
     gynecology: { en: "Gynecology", bn: "গাইনি" },
     pediatrics: { en: "Pediatrics", bn: "শিশু বিশেষজ্ঞ" },
     cardiology: { en: "Cardiology", bn: "হৃদরোগ" },
@@ -115,6 +133,29 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
                 </div>
               ))}
             </div>
+
+            {/* AI handwriting legibility (aggregated from real scans) */}
+            {(() => {
+              const leg = lookupLegibility(doc.bmdc);
+              if (!leg) return null;
+              const tone = leg.avgScore >= 4 ? "emerald" : leg.avgScore >= 3 ? "amber" : "red";
+              const cls = tone === "emerald" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : tone === "amber" ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-red-50 border-red-200 text-red-700";
+              return (
+                <div className={`mt-2 rounded-lg border p-2 flex items-center gap-2 ${cls}`}>
+                  <PenLine size={13} className="shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wider">
+                      {lang === "bn" ? "AI হাতের লেখা" : "AI handwriting"}
+                    </p>
+                    <p className="text-[10px] opacity-80 truncate">
+                      {leg.avgScore}/5 · {leg.scoreCount} {lang === "bn" ? "স্ক্যান" : "scans"}
+                      {leg.avgScore <= 2.5 && (lang === "bn" ? " · প্রশিক্ষণ প্রয়োজন" : " · needs training")}
+                    </p>
+                  </div>
+                  <span className="text-sm font-black">{leg.avgScore}</span>
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-2 gap-2 mt-3">
               <a href={`tel:${doc.phone}`}

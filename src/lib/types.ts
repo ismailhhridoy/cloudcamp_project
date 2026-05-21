@@ -43,6 +43,65 @@ export interface AuditSample {
   sampledAt: string;
 }
 
+// Prescription extraction — schema returned by /api/scan-prescription.
+
+export interface DoseSchedule {
+  morning: number;   // count of units (tablets, ml)
+  noon: number;
+  night: number;
+  before_food?: boolean;
+  after_food?: boolean;
+  notes?: string;    // e.g. "with warm water"
+}
+
+export interface ExtractedMedicine {
+  name: string;
+  generic?: string;
+  strength?: string;          // e.g. "500 mg"
+  form?: string;              // tablet, syrup, capsule, drops, injection
+  schedule: DoseSchedule;
+  duration?: string;          // e.g. "5 days"
+  purpose_english?: string;
+  purpose_bangla?: string;
+  warnings?: string;
+}
+
+export interface ExtractedDoctor {
+  name?: string;
+  bmdc?: string;
+  hospital?: string;
+  specialization?: string;
+}
+
+export interface ExtractedPrescription {
+  doctor: ExtractedDoctor;
+  patient_age?: string;
+  patient_sex?: string;
+  chief_complaint?: string;
+  diagnosis_hint?: string;
+  medicines: ExtractedMedicine[];
+  tests?: string[];
+  follow_up?: string;
+  patient_notes?: string;
+  confidence: number;                          // 0–100
+  legibility_score: number;                    // 1–5  (1 illegible, 5 perfectly readable)
+  legibility_reason: string;
+  nutrition_guidelines: string[];              // each item is a short bilingual-or-EN bullet
+  nutrition_guidelines_bn?: string[];          // same bullets in Bangla
+  provider: "gemini" | "groq";                 // which model produced this
+}
+
+// Per-doctor aggregated AI legibility from scans, keyed by BMDC number.
+export interface LegibilityRecord {
+  bmdc: string;
+  doctorName?: string;
+  scoreSum: number;
+  scoreCount: number;
+  avgScore: number;
+  worstReason?: string;
+  lastUpdated: string;
+}
+
 // A signed periodic certification. One per doctor per month.
 export interface Certification {
   id: string;

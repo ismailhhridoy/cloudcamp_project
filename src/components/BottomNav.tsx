@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Home, MessageSquare, Camera, Users, MoreHorizontal, BarChart3, ShieldCheck, Stethoscope, X } from "lucide-react";
+import { Home, MessageSquare, Camera, Users, MoreHorizontal, BarChart3, ShieldCheck, Stethoscope, Settings as SettingsIcon, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
@@ -23,6 +23,7 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
     { id: "dashboard", icon: BarChart3, label: t("more.dashboard") },
     { id: "compliance", icon: ShieldCheck, label: t("more.compliance") },
     { id: "doctor-portal", icon: Stethoscope, label: t("more.doctor_portal") },
+    { id: "settings", icon: SettingsIcon, label: t("more.settings") },
   ];
 
   const isMoreActive = moreItems.some((m) => m.id === activeTab);

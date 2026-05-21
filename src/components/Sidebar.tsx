@@ -1,4 +1,4 @@
-import { Home, MessageSquare, Camera, Users, BarChart3, ShieldCheck, LogIn, LogOut, Globe, Stethoscope } from "lucide-react";
+import { Home, MessageSquare, Camera, Users, BarChart3, ShieldCheck, LogIn, LogOut, Globe, Stethoscope, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { auth } from "../lib/firebase.ts";
@@ -22,6 +22,7 @@ export function Sidebar({ activeTab, setActiveTab, user, onLoginClick }: Sidebar
     { id: "dashboard", icon: BarChart3, label: t("app.nav.dashboard") },
     { id: "compliance", icon: ShieldCheck, label: t("app.nav.compliance") },
     { id: "doctor-portal", icon: Stethoscope, label: t("app.nav.doctor_portal") },
+    { id: "settings", icon: SettingsIcon, label: t("app.nav.settings") },
   ];
 
   return (
