@@ -1,19 +1,51 @@
-import { useState } from "react";
-import { Camera, CheckCircle2, AlertCircle, Loader2, PlayCircle, Pill, ShieldCheck, Clock, Bell, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Camera, CheckCircle2, AlertCircle, Loader2, PlayCircle, Pill, ShieldCheck, ShieldAlert, Clock, Bell, ChevronDown, ChevronUp, FileText, Volume2, Square, Apple, Stethoscope, FlaskConical } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { User } from "firebase/auth";
+import { DoseGrid } from "../components/DoseGrid.tsx";
+import {
+  addLegibilityScore,
+  listDoctors,
+  getLegibilityForDoctor,
+  useStore,
+  KEYS,
+} from "../lib/store.ts";
+import type { ExtractedPrescription, ExtractedMedicine, LegibilityRecord } from "../lib/types.ts";
+import { speak, stop as ttsStop, isTtsSupported, warmupVoices } from "../lib/tts.ts";
+
+// Hard-coded "known doctors" list mirror — used purely for the BMDC verification check on
+// scans. Kept in sync with the Doctors page seed; in production this would query a verified
+// BMDC index.
+const SEEDED_BMDCS = new Set(["A-54321", "A-98765", "A-12345", "A-67890", "A-23456", "A-34567", "A-99999"]);
 
 export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => void; user: User | null }) {
   const { t, lang } = useLanguage();
   const [preview, setPreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ExtractedPrescription | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedMed, setExpandedMed] = useState<number | null>(null);
   const [reminderSet, setReminderSet] = useState<Set<number>>(new Set());
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const legibilityRecords = useStore<LegibilityRecord[]>(KEYS.LEGIBILITY_KEY, []);
+
+  useEffect(() => { warmupVoices(); }, []);
+
+  // BMDC verification: cross-reference against seeded + onboarded doctor pool.
+  const verifiedBmdcs = useMemo(() => {
+    const set = new Set<string>(SEEDED_BMDCS);
+    for (const d of listDoctors()) {
+      if (d.bmdcNumber && d.approvalStatus === "approved") set.add(d.bmdcNumber);
+    }
+    return set;
+  }, [result]);
+
+  const extractedBmdc = result?.doctor?.bmdc?.trim() || "";
+  const isBmdcKnown = !!extractedBmdc && verifiedBmdcs.has(extractedBmdc);
+  const legibilityForThisDoctor = extractedBmdc ? getLegibilityForDoctor(extractedBmdc) : undefined;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,7 +72,17 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
       if (!response.ok) throw new Error("Server error");
       const data = await response.json();
       if (data.error) throw new Error(data.error);
-      setResult(data);
+      setResult(data as ExtractedPrescription);
+
+      // Aggregate AI legibility score against the doctor's BMDC for the Doctors list.
+      if (data?.doctor?.bmdc && typeof data?.legibility_score === "number") {
+        addLegibilityScore(
+          String(data.doctor.bmdc).trim(),
+          Number(data.legibility_score),
+          data.doctor.name || undefined,
+          data.legibility_reason || undefined
+        );
+      }
     } catch (err: any) {
       setError(err.message || "Failed to analyze. Please try with a clearer image.");
     } finally {
@@ -54,10 +96,47 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
     // In production: save to Firestore with notification schedule
   };
 
+  // Build a flat readable text version of the prescription for TTS.
+  const buildSpeechText = (lng: "en" | "bn"): string => {
+    if (!result) return "";
+    const parts: string[] = [];
+    const doc = result.doctor || {};
+    if (doc.name) parts.push(lng === "bn" ? `ডাক্তার ${doc.name}` : `Doctor ${doc.name}`);
+    if (result.chief_complaint) parts.push(lng === "bn" ? `সমস্যা: ${result.chief_complaint}` : `Complaint: ${result.chief_complaint}`);
+    if (result.diagnosis_hint) parts.push(lng === "bn" ? `সম্ভাব্য রোগ: ${result.diagnosis_hint}` : `Likely diagnosis: ${result.diagnosis_hint}`);
+    parts.push(lng === "bn" ? `মোট ${result.medicines.length}টি ওষুধ লেখা আছে।` : `${result.medicines.length} medicines were prescribed.`);
+    result.medicines.forEach((m, i) => {
+      const purpose = lng === "bn" ? (m.purpose_bangla || "") : (m.purpose_english || "");
+      const sched = m.schedule || { morning: 0, noon: 0, night: 0 };
+      const schedText = lng === "bn"
+        ? `সকাল ${sched.morning}, দুপুর ${sched.noon}, রাত ${sched.night}`
+        : `morning ${sched.morning}, noon ${sched.noon}, night ${sched.night}`;
+      const dur = m.duration ? (lng === "bn" ? `, ${m.duration} ধরে` : `, for ${m.duration}`) : "";
+      const food = sched.before_food ? (lng === "bn" ? "খাবারের আগে" : "before food") : sched.after_food ? (lng === "bn" ? "খাবারের পরে" : "after food") : "";
+      const head = lng === "bn" ? `ওষুধ ${i + 1}: ${m.name}${m.strength ? ", " + m.strength : ""}` : `Medicine ${i + 1}: ${m.name}${m.strength ? ", " + m.strength : ""}`;
+      parts.push(`${head}. ${schedText}${dur}. ${food}. ${purpose}`);
+    });
+    if (result.follow_up) parts.push(lng === "bn" ? `ফলো-আপ: ${result.follow_up}` : `Follow-up: ${result.follow_up}`);
+    if (result.patient_notes) parts.push(lng === "bn" ? `অতিরিক্ত নির্দেশনা: ${result.patient_notes}` : `Additional instructions: ${result.patient_notes}`);
+    return parts.join(". ");
+  };
+
+  const handleListen = () => {
+    if (isSpeaking) { ttsStop(); setIsSpeaking(false); return; }
+    const text = buildSpeechText(lang);
+    if (!text) return;
+    setIsSpeaking(true);
+    speak(text, {
+      lang: lang === "bn" ? "bn-BD" : "en-US",
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false),
+    });
+  };
+
   return (
-    <div className="p-4 space-y-5 pb-24">
-      <div className="text-center space-y-1">
-        <h2 className="text-xl font-bold text-gray-900">{t("scan.title")}</h2>
+    <div className="p-4 lg:p-8 space-y-5 pb-24 lg:max-w-3xl lg:mx-auto">
+      <div className="text-center lg:text-left space-y-1">
+        <h2 className="text-xl lg:text-3xl font-bold text-gray-900">{t("scan.title")}</h2>
         <p className="text-sm text-gray-500">{t("scan.subtitle")}</p>
       </div>
 
@@ -140,67 +219,146 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
         {result && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
 
-            {/* Doctor card */}
+            {/* Doctor card with verification + AI legibility */}
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                 <FileText size={12} /> {t("scan.result.doctor_detected")}
+                {result.provider && (
+                  <span className="ml-auto text-[9px] font-bold text-gray-400 uppercase">
+                    via {result.provider}
+                  </span>
+                )}
               </div>
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-lg font-bold text-gray-900">{result.doctor?.name || (lang === "bn" ? "নাম পাওয়া যায়নি" : "Name not found")}</p>
                   {result.doctor?.specialization && <p className="text-xs text-gray-500 mt-0.5">{result.doctor.specialization}</p>}
                   {result.doctor?.hospital && <p className="text-xs text-gray-500">{result.doctor.hospital}</p>}
                   <div className="flex items-center gap-1.5 mt-2">
-                    <ShieldCheck size={14} className={result.doctor?.bmdc && result.doctor.bmdc !== "Not visible on prescription" ? "text-emerald-500" : "text-gray-300"} />
-                    <span className="text-xs text-gray-500 font-medium">BMDC: {result.doctor?.bmdc || (lang === "bn" ? "দেখা যাচ্ছে না" : "Not visible")}</span>
+                    <ShieldCheck size={14} className={extractedBmdc ? "text-emerald-500" : "text-gray-300"} />
+                    <span className="text-xs text-gray-500 font-medium">BMDC: {extractedBmdc || (lang === "bn" ? "দেখা যাচ্ছে না" : "Not visible")}</span>
                   </div>
                 </div>
-                {result.doctor?.bmdc && result.doctor.bmdc !== "Not visible on prescription" && (
-                  <div className="bg-emerald-50 px-3 py-2 rounded-xl text-center shrink-0">
-                    <CheckCircle2 size={20} className="text-emerald-500 mx-auto" />
-                    <p className="text-[9px] font-bold text-emerald-600 mt-1">{lang === "bn" ? "যাচাইযোগ্য" : "Verifiable"}</p>
-                  </div>
+                {/* Verified / Unverified badge */}
+                {extractedBmdc && (
+                  isBmdcKnown ? (
+                    <div className="bg-emerald-50 px-3 py-2 rounded-xl text-center shrink-0 border border-emerald-200">
+                      <ShieldCheck size={18} className="text-emerald-500 mx-auto" />
+                      <p className="text-[9px] font-bold text-emerald-600 mt-1">{lang === "bn" ? "যাচাইকৃত" : "Verified"}</p>
+                    </div>
+                  ) : (
+                    <div className="bg-red-50 px-3 py-2 rounded-xl text-center shrink-0 border border-red-200">
+                      <ShieldAlert size={18} className="text-red-500 mx-auto" />
+                      <p className="text-[9px] font-bold text-red-600 mt-1">{lang === "bn" ? "অযাচাইকৃত" : "Unverified"}</p>
+                    </div>
+                  )
                 )}
               </div>
+
+              {/* Unverified BMDC banner */}
+              {extractedBmdc && !isBmdcKnown && (
+                <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3 flex gap-2 text-xs text-red-800">
+                  <ShieldAlert size={14} className="shrink-0 mt-0.5" />
+                  <span>{lang === "bn"
+                    ? `BMDC #${extractedBmdc} আমাদের নিবন্ধিত ডাক্তারের তালিকায় পাওয়া যায়নি। BMDC বা DRMC রেজিস্ট্রিতে যাচাই করুন।`
+                    : `BMDC #${extractedBmdc} not found in our verified doctor index. Please cross-check with BMDC or DRMC registry.`}</span>
+                </div>
+              )}
+
+              {/* AI legibility score */}
+              {typeof result.legibility_score === "number" && (
+                <div className="mt-3 bg-gray-50 border border-gray-100 rounded-xl p-3 flex gap-3 items-start">
+                  <div className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm shrink-0",
+                    result.legibility_score >= 4 ? "bg-emerald-100 text-emerald-700" :
+                    result.legibility_score >= 3 ? "bg-amber-100 text-amber-700" :
+                    "bg-red-100 text-red-700"
+                  )}>
+                    {result.legibility_score}/5
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                      {lang === "bn" ? "AI হাতের লেখা মূল্যায়ন" : "AI Handwriting Score"}
+                    </p>
+                    <p className="text-xs text-gray-700 mt-0.5">{result.legibility_reason}</p>
+                    {legibilityForThisDoctor && legibilityForThisDoctor.scoreCount > 1 && (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        {lang === "bn" ? "এই ডাক্তারের গড়:" : "Average for this doctor:"} <strong>{legibilityForThisDoctor.avgScore}/5</strong> ({legibilityForThisDoctor.scoreCount} {lang === "bn" ? "স্ক্যান" : "scans"})
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Listen Prescription button */}
+              {isTtsSupported() && result.medicines?.length > 0 && (
+                <button
+                  onClick={handleListen}
+                  className={cn(
+                    "mt-3 w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors",
+                    isSpeaking ? "bg-red-50 text-red-700 border border-red-200" : "bg-blue-600 text-white hover:bg-blue-500"
+                  )}
+                >
+                  {isSpeaking ? <><Square size={14} /> {lang === "bn" ? "থামান" : "Stop"}</> : <><Volume2 size={14} /> {lang === "bn" ? "প্রেসক্রিপশন শুনুন" : "Listen to Prescription"}</>}
+                </button>
+              )}
+
               {result.follow_up && (
                 <div className="mt-3 bg-blue-50 rounded-xl px-3 py-2">
                   <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{lang === "bn" ? "ফলো-আপ" : "Follow-up"}</p>
                   <p className="text-xs text-blue-800 mt-0.5">{result.follow_up}</p>
                 </div>
               )}
+              {result.diagnosis_hint && (
+                <div className="mt-2 bg-purple-50 rounded-xl px-3 py-2 flex gap-2">
+                  <Stethoscope size={12} className="text-purple-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">{lang === "bn" ? "সম্ভাব্য রোগ" : "Likely diagnosis"}</p>
+                    <p className="text-xs text-purple-800 mt-0.5">{result.diagnosis_hint}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Medicines */}
             <div className="space-y-3">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">{t("scan.result.meds_title")} ({result.medicines?.length || 0})</p>
-              {result.medicines?.map((med: any, i: number) => (
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                {t("scan.result.meds_title")} ({result.medicines?.length || 0})
+              </p>
+              {(result.medicines || []).map((med: ExtractedMedicine, i: number) => (
                 <motion.div key={i} layout className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                  <button onClick={() => setExpandedMed(expandedMed === i ? null : i)}
-                    className="w-full flex items-center gap-3 p-4 text-left">
+                  <button onClick={() => setExpandedMed(expandedMed === i ? null : i)} className="w-full flex items-start gap-3 p-4 text-left">
                     <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
                       <Pill size={20} className="text-emerald-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-900">{med.name}</p>
-                      <p className="text-xs text-gray-500">{med.dosage} · {med.frequency}</p>
-                      <p className="text-xs font-medium text-emerald-700 mt-1">{lang === "bn" ? med.purpose_bangla : med.purpose_english}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-gray-900">{med.name}</p>
+                        {med.strength && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{med.strength}</span>}
+                        {med.form && <span className="text-[10px] font-medium text-gray-500 lowercase">· {med.form}</span>}
+                      </div>
+                      {med.generic && <p className="text-[11px] text-gray-400 italic">{med.generic}</p>}
+                      {med.duration && (
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          <Clock size={10} className="inline -mt-0.5" /> {med.duration}
+                        </p>
+                      )}
+                      <p className="text-xs font-medium text-emerald-700 mt-1">
+                        {lang === "bn" ? (med.purpose_bangla || med.purpose_english) : (med.purpose_english || med.purpose_bangla)}
+                      </p>
                     </div>
                     {expandedMed === i ? <ChevronUp size={16} className="text-gray-400 shrink-0" /> : <ChevronDown size={16} className="text-gray-400 shrink-0" />}
                   </button>
+
+                  {/* Always-visible dose grid */}
+                  <div className="px-4 pb-3">
+                    <DoseGrid schedule={med.schedule || { morning: 0, noon: 0, night: 0 }} lang={lang as "en" | "bn"} />
+                  </div>
+
                   <AnimatePresence>
                     {expandedMed === i && (
                       <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
                         <div className="px-4 pb-4 space-y-3 border-t border-gray-50 pt-3">
-                          <div className="grid grid-cols-2 gap-2">
-                            {med.duration && <div className="bg-gray-50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 font-bold uppercase">{lang === "bn" ? "সময়কাল" : "Duration"}</p><p className="text-xs font-medium text-gray-700 mt-0.5">{med.duration}</p></div>}
-                            {med.frequency && <div className="bg-gray-50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 font-bold uppercase">{lang === "bn" ? "কতবার" : "Frequency"}</p><p className="text-xs font-medium text-gray-700 mt-0.5">{med.frequency}</p></div>}
-                          </div>
-                          {med.purpose_bangla && (
-                            <div className="bg-emerald-50 rounded-xl p-3">
-                              <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">{lang === "bn" ? "কেন খাবেন" : "Purpose"}</p>
-                              <p className="text-xs text-emerald-800">{lang === "bn" ? med.purpose_bangla : med.purpose_english}</p>
-                            </div>
-                          )}
                           {med.warnings && (
                             <div className="bg-orange-50 rounded-xl p-3 flex gap-2">
                               <AlertCircle size={14} className="text-orange-500 shrink-0 mt-0.5" />
@@ -220,6 +378,46 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
                 </motion.div>
               ))}
             </div>
+
+            {/* Tests */}
+            {Array.isArray(result.tests) && result.tests.length > 0 && (
+              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <FlaskConical size={12} /> {lang === "bn" ? "পরীক্ষা সুপারিশ" : "Recommended tests"}
+                </p>
+                <ul className="space-y-1">
+                  {result.tests.map((tst, i) => (
+                    <li key={i} className="text-sm text-gray-700 flex gap-2">
+                      <span className="text-blue-500">•</span>{tst}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Nutrition guidelines */}
+            {Array.isArray(result.nutrition_guidelines) && result.nutrition_guidelines.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 shadow-sm">
+                <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Apple size={12} /> {lang === "bn" ? "পুষ্টি নির্দেশিকা" : "Nutrition guidelines"}
+                </p>
+                <ul className="space-y-2">
+                  {(lang === "bn" && Array.isArray(result.nutrition_guidelines_bn) && result.nutrition_guidelines_bn.length > 0
+                    ? result.nutrition_guidelines_bn
+                    : result.nutrition_guidelines
+                  ).map((tip, i) => (
+                    <li key={i} className="text-sm text-emerald-900 leading-relaxed flex gap-2">
+                      <span>•</span>{tip}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-emerald-700/60 mt-3 italic">
+                  {lang === "bn"
+                    ? "এটি AI পরামর্শ। ব্যক্তিগত খাদ্য তালিকার জন্য পুষ্টিবিদ বা ডাক্তারের সাথে যাচাই করুন।"
+                    : "AI-generated. Verify personalised diet plans with a doctor or dietitian."}
+                </p>
+              </div>
+            )}
 
             {/* Patient notes */}
             {result.patient_notes && (

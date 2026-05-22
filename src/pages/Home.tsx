@@ -1,4 +1,4 @@
-import { Activity, Thermometer, ShieldAlert, BookOpen, Search, ArrowRight, MessageSquare, Camera, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Activity, Thermometer, ShieldAlert, BookOpen, Search, ArrowRight, MessageSquare, Camera, Users, ChevronLeft, ChevronRight, BarChart3, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { useState, useEffect } from "react";
@@ -33,9 +33,9 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
   }, []);
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 lg:max-w-6xl lg:mx-auto lg:px-8 lg:pt-6">
       {/* Hero Section with Integrated Slider */}
-      <section className="relative h-[520px] bg-emerald-950 rounded-b-[3rem] overflow-hidden mx-0 shadow-2xl">
+      <section className="relative h-[520px] lg:h-[420px] bg-emerald-950 rounded-b-[3rem] lg:rounded-3xl overflow-hidden mx-0 shadow-2xl">
         {/* Background Images with Crossfade */}
         <AnimatePresence mode="wait">
           <motion.div
@@ -110,14 +110,14 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
       </section>
 
       {/* Trust Badges */}
-      <div className="px-6 flex justify-between items-center opacity-40 grayscale pointer-events-none">
+      <div className="px-6 lg:px-0 flex justify-between items-center opacity-40 grayscale pointer-events-none">
         <div className="text-[10px] font-black uppercase tracking-tighter">Ministry of Health</div>
         <div className="text-[10px] font-black uppercase tracking-tighter">BRAC University</div>
         <div className="text-[10px] font-black uppercase tracking-tighter">CloudCamp BD</div>
       </div>
 
       {/* Quick Stats/Alerts */}
-      <div className="px-6 grid grid-cols-2 gap-4">
+      <div className="px-6 lg:px-0 grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-orange-50 border border-orange-100 p-4 rounded-2xl">
           <Thermometer className="text-orange-600 mb-2" size={20} />
           <div className="text-[10px] text-orange-800 font-black uppercase tracking-wider mb-1">{t('home.stats.alert')}</div>
@@ -133,39 +133,53 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
       </div>
 
       {/* Core Features */}
-      <section className="px-6 space-y-4">
+      <section className="px-6 lg:px-0 space-y-4">
         <div className="flex items-end justify-between px-1">
-          <h3 className="text-xl font-black text-gray-900">{t('home.services.title')}</h3>
+          <h3 className="text-xl lg:text-2xl font-black text-gray-900">{t('home.services.title')}</h3>
           <span className="text-[10px] font-bold text-emerald-600">{t('home.services.view_all')}</span>
         </div>
-        
-        <div className="space-y-3">
-          <FeatureCard 
+
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+          <FeatureCard
             icon={<MessageSquare size={24} />}
             title={t('home.service.triage.title')}
             subtitle={t('home.service.triage.sub')}
             color="emerald"
             onClick={() => onNavigate('triage')}
           />
-          <FeatureCard 
+          <FeatureCard
             icon={<Camera size={24} />}
             title={t('home.service.scan.title')}
             subtitle={t('home.service.scan.sub')}
             color="blue"
             onClick={() => onNavigate('scan')}
           />
-          <FeatureCard 
+          <FeatureCard
             icon={<Users size={24} />}
             title={t('home.service.doctors.title')}
             subtitle={t('home.service.doctors.sub')}
             color="purple"
             onClick={() => onNavigate('doctors')}
           />
+          <FeatureCard
+            icon={<BarChart3 size={24} />}
+            title={t('home.nav.dashboard')}
+            subtitle={t('home.nav.dashboard_sub')}
+            color="emerald"
+            onClick={() => onNavigate('dashboard')}
+          />
+          <FeatureCard
+            icon={<ShieldCheck size={24} />}
+            title={t('compliance.title')}
+            subtitle={t('compliance.intro').slice(0, 60) + '…'}
+            color="blue"
+            onClick={() => onNavigate('compliance')}
+          />
         </div>
       </section>
 
       {/* How it Works / Mission */}
-      <section className="px-6">
+      <section className="px-6 lg:px-0">
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
@@ -198,7 +212,7 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
       </section>
 
       {/* Health Tip */}
-      <section className="px-6">
+      <section className="px-6 lg:px-0">
         <div className="p-5 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-100 relative overflow-hidden">
           <div className="relative z-10 flex items-start gap-4">
             <div className="p-2 bg-emerald-600 rounded-lg text-white">

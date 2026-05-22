@@ -4,23 +4,31 @@
  */
 
 import { useState, useEffect } from "react";
-import { MobileShell } from "./components/MobileShell.tsx";
+import { AppShell } from "./components/AppShell.tsx";
+import { ConsentGate } from "./components/ConsentGate.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { TriagePage } from "./pages/Triage.tsx";
 import { ScannerPage } from "./pages/Scanner.tsx";
 import { DoctorsPage } from "./pages/Doctors.tsx";
 import { DashboardPage } from "./pages/Dashboard.tsx";
+import { CompliancePage } from "./pages/Compliance.tsx";
+import { DoctorPortal } from "./pages/DoctorPortal.tsx";
+import { SettingsPage } from "./pages/Settings.tsx";
 import { auth, signInWithGoogle } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { LogIn, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "./lib/LanguageContext.tsx";
+import { getConsent } from "./lib/consent.ts";
+import { autoLoadIfCached } from "./lib/llm.ts";
+import { autoLoadTfIfOptedIn } from "./lib/transformersEngine.ts";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [hasConsent, setHasConsent] = useState<boolean>(() => !!getConsent());
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -29,6 +37,10 @@ export default function App() {
       setLoading(false);
       if (u) setShowLoginModal(false);
     });
+    // Boot both offline engines in the background if the user has previously opted in. This way
+    // they're ready by the time the patient opens Triage — no extra click after a reload.
+    autoLoadIfCached();
+    autoLoadTfIfOptedIn();
     return () => unsubscribe();
   }, []);
 
@@ -51,18 +63,30 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'home': return <HomePage onNavigate={setActiveTab} />;
-      case 'triage': return <TriagePage onLoginRequired={triggerLogin} user={user} />;
-      case 'scan': return <ScannerPage onLoginRequired={triggerLogin} user={user} />;
-      case 'doctors': return <DoctorsPage onLoginRequired={triggerLogin} user={user} />;
-      case 'dashboard': return <DashboardPage />;
-      default: return <HomePage onNavigate={setActiveTab} />;
+      case "home":
+        return <HomePage onNavigate={setActiveTab} />;
+      case "triage":
+        return <TriagePage onLoginRequired={triggerLogin} user={user} />;
+      case "scan":
+        return <ScannerPage onLoginRequired={triggerLogin} user={user} />;
+      case "doctors":
+        return <DoctorsPage onLoginRequired={triggerLogin} user={user} />;
+      case "dashboard":
+        return <DashboardPage />;
+      case "compliance":
+        return <CompliancePage />;
+      case "doctor-portal":
+        return <DoctorPortal />;
+      case "settings":
+        return <SettingsPage />;
+      default:
+        return <HomePage onNavigate={setActiveTab} />;
     }
   };
 
   return (
     <>
-      <MobileShell activeTab={activeTab} setActiveTab={setActiveTab}>
+      <AppShell activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLoginClick={triggerLogin}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -75,19 +99,30 @@ export default function App() {
             {renderContent()}
           </motion.div>
         </AnimatePresence>
-      </MobileShell>
+      </AppShell>
+
+      {/* Consent gate — first run only */}
+      {!hasConsent && (
+        <ConsentGate
+          onAccept={() => setHasConsent(true)}
+          onReviewCompliance={() => {
+            setHasConsent(true);
+            setActiveTab("compliance");
+          }}
+        />
+      )}
 
       {/* Login Modal */}
       <AnimatePresence>
         {showLoginModal && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              className="w-full max-w-md bg-white rounded-t-3xl p-8 relative shadow-2xl"
+          <div className="fixed inset-0 z-[100] flex items-end lg:items-center justify-center bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              className="w-full max-w-md bg-white rounded-t-3xl lg:rounded-3xl p-8 relative shadow-2xl"
             >
-              <button 
+              <button
                 onClick={() => setShowLoginModal(false)}
                 className="absolute top-6 right-6 text-gray-400"
               >
@@ -98,27 +133,25 @@ export default function App() {
                 <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center text-emerald-600">
                   <LogIn size={40} />
                 </div>
-                
+
                 <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-gray-900">{t('auth.prompt.title')}</h2>
-                  <p className="text-gray-500 text-sm leading-relaxed">
-                    {t('auth.prompt.desc')}
-                  </p>
+                  <h2 className="text-2xl font-bold text-gray-900">{t("auth.prompt.title")}</h2>
+                  <p className="text-gray-500 text-sm leading-relaxed">{t("auth.prompt.desc")}</p>
                 </div>
 
-                <button 
+                <button
                   onClick={signInWithGoogle}
                   className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 shadow-xl hover:bg-emerald-500 transition-colors"
                 >
                   <LogIn size={20} />
-                  {t('auth.btn.google')}
+                  {t("auth.btn.google")}
                 </button>
-                
-                <button 
-                   onClick={() => setShowLoginModal(false)}
-                   className="text-gray-400 text-sm font-medium"
+
+                <button
+                  onClick={() => setShowLoginModal(false)}
+                  className="text-gray-400 text-sm font-medium"
                 >
-                  {t('auth.btn.skip')}
+                  {t("auth.btn.skip")}
                 </button>
               </div>
             </motion.div>
@@ -128,4 +161,3 @@ export default function App() {
     </>
   );
 }
-

@@ -1,12 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Mic, Send, Info, Loader2, MicOff, WifiOff } from "lucide-react";
+import { Mic, Send, Info, Loader2, MicOff, WifiOff, Cpu, Cloud, BookOpen, UserRound } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Markdown from "react-markdown";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { User } from "firebase/auth";
+import { useLocalLLM } from "../lib/llm.ts";
+import { useTfEngine } from "../lib/transformersEngine.ts";
+import { chat as routerChat, type ChatSource } from "../lib/tierRouter.ts";
+import { DiagnosticPanel } from "../components/DiagnosticPanel.tsx";
+import { PatientProfileSheet } from "../components/PatientProfileSheet.tsx";
+import { usePatientProfile, summariseProfile } from "../lib/profile.ts";
 
-interface Message { role: "user" | "assistant"; content: string; }
+interface Message { role: "user" | "assistant"; content: string; safety?: { verdict: string; matched: string[]; scrubbedLines?: number }; source?: ChatSource; diagnosticForSymptoms?: string; }
 interface OfflineRule { keywords: string[]; verdict: string; en: string; bn: string; }
 
 export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => void; user: User | null }) {
@@ -21,6 +27,10 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
   const [offlineRules, setOfflineRules] = useState<OfflineRule[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const llm = useLocalLLM();
+  const tf = useTfEngine();
+  const profile = usePatientProfile();
+  const [showProfile, setShowProfile] = useState(false);
 
   // Monitor online status
   useEffect(() => {
@@ -59,24 +69,45 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
-    if (isOffline) {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { role: "assistant", content: checkOffline(userMessage) }]);
-        setIsLoading(false);
-      }, 600);
-      return;
-    }
+    // Insert an empty assistant placeholder so streaming tokens can fill in live.
+    // Stamp the same user message onto the assistant turn so the diagnostic panel
+    // (which mounts under the bubble) can run its multi-factor analysis in parallel.
+    let placeholderIndex = -1;
+    setMessages(prev => {
+      placeholderIndex = prev.length;
+      return [...prev, { role: "assistant", content: "", diagnosticForSymptoms: userMessage }];
+    });
 
     try {
-      const response = await fetch("/api/triage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, history: messages }),
-      });
-      const data = await response.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.text }]);
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: checkOffline(userMessage) }]);
+      const result = await routerChat(
+        messages.map(m => ({ role: m.role, content: m.content })),
+        userMessage,
+        {
+          lang,
+          onChunk: (_chunk, full, source) => {
+            setMessages(prev =>
+              prev.map((m, i) => (i === placeholderIndex ? { ...m, content: full, source } : m))
+            );
+          },
+        }
+      );
+      // Final settle (also sets safety + source if it wasn't streamed).
+      setMessages(prev =>
+        prev.map((m, i) =>
+          i === placeholderIndex
+            ? { ...m, content: result.text, safety: result.safety as any, source: result.source }
+            : m
+        )
+      );
+    } catch (err) {
+      console.error("Triage router failed completely", err);
+      setMessages(prev =>
+        prev.map((m, i) =>
+          i === placeholderIndex
+            ? { ...m, content: checkOffline(userMessage), source: "rules" as ChatSource }
+            : m
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +171,12 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full lg:max-w-3xl lg:mx-auto lg:w-full lg:my-6 lg:rounded-3xl lg:overflow-hidden lg:shadow-xl lg:border lg:border-gray-100 lg:bg-white lg:min-h-[80vh]">
+      {/* Profile sheet */}
+      <AnimatePresence>
+        {showProfile && <PatientProfileSheet onClose={() => setShowProfile(false)} />}
+      </AnimatePresence>
+
       {/* Offline banner */}
       <AnimatePresence>
         {isOffline && (
@@ -158,20 +194,47 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
         <p className="text-[10px] text-amber-800 leading-tight"><strong>{t("triage.disclaimer")}</strong></p>
       </div>
 
+      {/* Profile bar — drives the diagnostic engine */}
+      <button
+        onClick={() => setShowProfile(true)}
+        className="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-100 text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="w-7 h-7 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
+          <UserRound size={14} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t("triage.profile.label")}</p>
+          <p className="text-xs font-medium text-gray-800 truncate">{summariseProfile(profile, lang as "en" | "bn")}</p>
+        </div>
+        <span className="text-[10px] font-bold text-emerald-600">{t("triage.profile.edit")}</span>
+      </button>
+
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+              className={cn("flex flex-col gap-2", msg.role === "user" ? "items-end" : "items-start")}>
               <div className={cn(
                 "max-w-[88%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm prose prose-sm",
                 msg.role === "user"
                   ? "bg-emerald-600 text-white rounded-tr-none prose-invert"
                   : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
               )}>
-                <Markdown>{msg.content}</Markdown>
+                <Markdown>{msg.content || (msg.role === "assistant" ? "…" : "")}</Markdown>
               </div>
+              {msg.role === "assistant" && msg.source && i > 0 && (
+                <SourcePill source={msg.source} t={t} />
+              )}
+              {/* Multi-factor diagnostic panel — runs alongside the chat reply. */}
+              {msg.role === "assistant" && msg.diagnosticForSymptoms && (
+                <div className="w-full lg:max-w-[480px] mt-1">
+                  <DiagnosticPanel
+                    symptoms={msg.diagnosticForSymptoms}
+                    onSetProfile={() => setShowProfile(true)}
+                  />
+                </div>
+              )}
             </motion.div>
           ))}
           {isLoading && (
@@ -203,7 +266,7 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
       )}
 
       {/* Input */}
-      <div className="p-4 pb-20 bg-white border-t border-gray-100 shadow-lg">
+      <div className="p-4 pb-20 lg:pb-4 bg-white border-t border-gray-100 shadow-lg">
         <div className="flex items-center gap-2">
           <motion.button whileTap={{ scale: 0.9 }} onClick={toggleRecording}
             className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg",
@@ -226,7 +289,35 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
             {lang === "bn" ? "শুনছি... কথা বলুন" : "Listening... speak now"}
           </p>
         )}
+        <EngineStatus isOffline={isOffline} llmStatus={llm.status} tfStatus={tf.status} t={t} />
       </div>
     </div>
   );
 }
+
+function SourcePill({ source, t }: { source: ChatSource; t: (k: string) => string }) {
+  const map = {
+    cloud: { c: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <Cloud size={10} />, key: "triage.source.cloud" },
+    kb: { c: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <BookOpen size={10} />, key: "triage.source.kb" },
+    webllm: { c: "bg-blue-50 text-blue-700 border-blue-200", icon: <Cpu size={10} />, key: "triage.source.webllm" },
+    wasm: { c: "bg-purple-50 text-purple-700 border-purple-200", icon: <Cpu size={10} />, key: "triage.source.wasm" },
+    rules: { c: "bg-amber-50 text-amber-700 border-amber-200", icon: <BookOpen size={10} />, key: "triage.source.rules" },
+  } as const;
+  const m = map[source];
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${m.c}`}>
+      {m.icon} {t(m.key)}
+    </span>
+  );
+}
+
+function EngineStatus({ isOffline, llmStatus, tfStatus, t }: { isOffline: boolean; llmStatus: string; tfStatus: string; t: (k: string) => string }) {
+  let key: string | null = null;
+  if (isOffline && llmStatus === "ready") key = "triage.engine.webllmActive";
+  else if (isOffline && tfStatus === "ready") key = "triage.engine.wasmActive";
+  else if (isOffline) key = "triage.engine.rulesActive";
+  else if (llmStatus === "ready" || tfStatus === "ready") key = "triage.engine.localReady";
+  if (!key) return null;
+  return <p className="text-center text-[10px] text-gray-400 font-medium mt-2">{t(key)}</p>;
+}
+

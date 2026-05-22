@@ -1,0 +1,20 @@
+{
+  "updatedAt": "2026-05-22",
+  "source": "Mock IEDCR weekly surveillance snapshot for demo. Replace with live feed for production.",
+  "trends": [
+    { "district": "Dhaka",      "disease": "Dengue",          "diseaseTags": ["dengue", "ডেঙ্গু"],          "trendPercent": 14, "cases": 1240 },
+    { "district": "Dhaka",      "disease": "Diarrhea",        "diseaseTags": ["diarrhea", "ডায়রিয়া"],        "trendPercent": 6,  "cases": 480 },
+    { "district": "Sylhet",     "disease": "Dengue",          "diseaseTags": ["dengue", "ডেঙ্গু"],          "trendPercent": 23, "cases": 412 },
+    { "district": "Sylhet",     "disease": "Waterborne",      "diseaseTags": ["waterborne", "জলবাহিত", "diarrhea", "ডায়রিয়া"], "trendPercent": 18, "cases": 198 },
+    { "district": "Chittagong", "disease": "Typhoid",         "diseaseTags": ["typhoid", "টাইফয়েড"],        "trendPercent": 5,  "cases": 312 },
+    { "district": "Khulna",     "disease": "Diarrhea",        "diseaseTags": ["diarrhea", "ডায়রিয়া"],        "trendPercent": 8,  "cases": 423 },
+    { "district": "Rajshahi",   "disease": "Flu",             "diseaseTags": ["flu", "ফ্লু", "cold", "সর্দি"], "trendPercent": -3, "cases": 156 },
+    { "district": "Rangpur",    "disease": "Pneumonia",       "diseaseTags": ["pneumonia", "নিউমোনিয়া"],     "trendPercent": 3,  "cases": 145 },
+    { "district": "Barisal",    "disease": "Malaria",         "diseaseTags": ["malaria", "ম্যালেরিয়া"],       "trendPercent": -2, "cases": 87 },
+    { "district": "Mymensingh", "disease": "Pneumonia",       "diseaseTags": ["pneumonia", "নিউমোনিয়া"],     "trendPercent": 6,  "cases": 234 },
+    { "district": "Cumilla",    "disease": "Dengue",          "diseaseTags": ["dengue", "ডেঙ্গু"],          "trendPercent": 11, "cases": 188 },
+    { "district": "Noakhali",   "disease": "Cholera",         "diseaseTags": ["cholera", "কলেরা", "diarrhea", "ডায়রিয়া"], "trendPercent": 9, "cases": 121 },
+    { "district": "Jashore",    "disease": "Heat illness",    "diseaseTags": ["heat stroke", "heat", "হিট স্ট্রোক"], "trendPercent": 12, "cases": 94 },
+    { "district": "Tangail",    "disease": "Snakebite",       "diseaseTags": ["snake bite", "snakebite", "সাপের কামড়"], "trendPercent": 19, "cases": 41 }
+  ]
+}

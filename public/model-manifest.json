@@ -1,0 +1,11 @@
+{
+  "recommended": {
+    "modelId": "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
+    "label": "Qwen 2.5 (1.5B, f32)",
+    "revision": "2",
+    "approxSizeMb": 1200,
+    "languages": ["bn", "en"],
+    "releasedAt": "2026-05-21"
+  },
+  "minimumAppRevision": "1"
+}
