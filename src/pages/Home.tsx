@@ -1,7 +1,8 @@
-import { Activity, Thermometer, ShieldAlert, BookOpen, Search, ArrowRight, MessageSquare, Camera, Users, ChevronLeft, ChevronRight, BarChart3, ShieldCheck } from "lucide-react";
+import { Activity, Thermometer, ShieldAlert, BookOpen, ArrowRight, MessageSquare, Camera, Users, Cloud, Droplet } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { useState, useEffect } from "react";
+import { getDailyTip, type DailyTip } from "../lib/healthTips.ts";
 
 const SLIDES = [
   {
@@ -22,14 +23,25 @@ const SLIDES = [
 ];
 
 export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [tip, setTip] = useState<DailyTip | null>(null);
+  const [tipLoading, setTipLoading] = useState(true);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % SLIDES.length);
     }, 5000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTipLoading(true);
+    getDailyTip()
+      .then((r) => { if (!cancelled) { setTip(r); setTipLoading(false); } })
+      .catch(() => { if (!cancelled) setTipLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -109,13 +121,6 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
         </div>
       </section>
 
-      {/* Trust Badges */}
-      <div className="px-6 lg:px-0 flex justify-between items-center opacity-40 grayscale pointer-events-none">
-        <div className="text-[10px] font-black uppercase tracking-tighter">Ministry of Health</div>
-        <div className="text-[10px] font-black uppercase tracking-tighter">BRAC University</div>
-        <div className="text-[10px] font-black uppercase tracking-tighter">CloudCamp BD</div>
-      </div>
-
       {/* Quick Stats/Alerts */}
       <div className="px-6 lg:px-0 grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-orange-50 border border-orange-100 p-4 rounded-2xl">
@@ -161,20 +166,6 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
             color="purple"
             onClick={() => onNavigate('doctors')}
           />
-          <FeatureCard
-            icon={<BarChart3 size={24} />}
-            title={t('home.nav.dashboard')}
-            subtitle={t('home.nav.dashboard_sub')}
-            color="emerald"
-            onClick={() => onNavigate('dashboard')}
-          />
-          <FeatureCard
-            icon={<ShieldCheck size={24} />}
-            title={t('compliance.title')}
-            subtitle={t('compliance.intro').slice(0, 60) + '…'}
-            color="blue"
-            onClick={() => onNavigate('compliance')}
-          />
         </div>
       </section>
 
@@ -189,40 +180,49 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
           </div>
           
           <div className="space-y-4">
-            <div className="flex gap-4">
-              <div className="w-4 h-4 rounded-full bg-emerald-100 border-2 border-white shadow-sm shrink-0 mt-1" />
-              <p className="text-sm text-gray-600 leading-relaxed">
-                <strong>{t('home.why.voice.title')}</strong> {t('home.why.voice.desc')}
-              </p>
-            </div>
-            <div className="flex gap-4">
-              <div className="w-4 h-4 rounded-full bg-emerald-100 border-2 border-white shadow-sm shrink-0 mt-1" />
-              <p className="text-sm text-gray-600 leading-relaxed">
-                <strong>{t('home.why.offline.title')}</strong> {t('home.why.offline.desc')}
-              </p>
-            </div>
-            <div className="flex gap-4">
-              <div className="w-4 h-4 rounded-full bg-emerald-100 border-2 border-white shadow-sm shrink-0 mt-1" />
-              <p className="text-sm text-gray-600 leading-relaxed">
-                <strong>{t('home.why.accountable.title')}</strong> {t('home.why.accountable.desc')}
-              </p>
-            </div>
+            {[
+              { titleKey: 'home.why.f1.title', descKey: 'home.why.f1.desc' },
+              { titleKey: 'home.why.f2.title', descKey: 'home.why.f2.desc' },
+              { titleKey: 'home.why.f3.title', descKey: 'home.why.f3.desc' },
+              { titleKey: 'home.why.f4.title', descKey: 'home.why.f4.desc' },
+              { titleKey: 'home.why.f5.title', descKey: 'home.why.f5.desc' },
+            ].map((row, i) => (
+              <div key={i} className="flex gap-4">
+                <div className="w-4 h-4 rounded-full bg-emerald-100 border-2 border-white shadow-sm shrink-0 mt-1" />
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  <strong>{t(row.titleKey)}</strong> {t(row.descKey)}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Health Tip */}
+      {/* Daily Health Tip (live, weather + profile aware) */}
       <section className="px-6 lg:px-0">
         <div className="p-5 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-100 relative overflow-hidden">
           <div className="relative z-10 flex items-start gap-4">
-            <div className="p-2 bg-emerald-600 rounded-lg text-white">
+            <div className="p-2 bg-emerald-600 rounded-lg text-white shrink-0">
               <ShieldAlert size={20} />
             </div>
-            <div>
-              <h4 className="font-bold text-emerald-900 text-sm">{t('home.tip.title')}</h4>
-              <p className="text-xs text-emerald-800/70 mt-1 italic font-medium">
-                {t('home.tip.desc')}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-bold text-emerald-900 text-sm">{t('home.tip.title')}</h4>
+                {tip?.weather && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    <Cloud size={10} /> {Math.round(tip.weather.temp)}°C
+                    <Droplet size={10} className="ml-1" /> {Math.round(tip.weather.humidity)}%
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-emerald-800/80 mt-1 leading-relaxed">
+                {tipLoading
+                  ? (lang === "bn" ? "আজকের টিপ লোড হচ্ছে..." : "Loading today's tip...")
+                  : (tip ? (lang === "bn" ? tip.bn : tip.en) : t('home.tip.desc'))}
               </p>
+              {tip && (
+                <p className="text-[10px] text-emerald-700/60 mt-1.5 italic">{tip.source}</p>
+              )}
             </div>
           </div>
         </div>
@@ -256,8 +256,3 @@ function FeatureCard({ icon, title, subtitle, color, onClick }: any) {
     </motion.button>
   );
 }
-
-// Simple icons to avoid too many imports in example
-const MessageSquareIcon = () => <MessageSquare size={24} />;
-const CameraIcon = () => <Camera size={24} />;
-const UsersIcon = () => <Users size={24} />;

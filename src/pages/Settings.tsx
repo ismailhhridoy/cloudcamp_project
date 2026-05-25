@@ -34,6 +34,8 @@ import {
   clearTfOptIn,
   TF_DEFAULTS,
 } from "../lib/transformersEngine.ts";
+import { useFontScale, type FontScale } from "../lib/fontSize.ts";
+import { Type as TypeIcon } from "lucide-react";
 import { useOnlineStatus } from "../lib/connectivity.ts";
 import { detectCapabilities, describeTier, type DeviceCapabilities } from "../lib/capabilities.ts";
 
@@ -117,6 +119,12 @@ export function SettingsPage() {
         <h1 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{t("settings.title")}</h1>
         <p className="text-sm text-gray-500 mt-2 leading-relaxed">{t("settings.intro")}</p>
       </header>
+
+      {/* Font size — keep this near the top so low-vision users can find it fast. */}
+      <FontSizeSection />
+
+      {/* Beginner-friendly offline AI panel — plain language, one big tap. */}
+      <SimpleOfflineSection tf={tf} llm={llm} webgpu={webgpu} handleLoadTf={handleLoadTf} handleDownload={handleDownload} />
 
       {/* Device capability card */}
       {caps && (
@@ -498,5 +506,118 @@ function ModelStatusPill({
     >
       {icon} {label}
     </span>
+  );
+}
+
+function SimpleOfflineSection({ tf, llm, webgpu, handleLoadTf, handleDownload }: any) {
+  const { t, lang } = useLanguage();
+  // Status that matters to the user: either engine being "ready" means the app can answer offline.
+  const ready = tf.status === "ready" || llm.status === "ready";
+  const loading = tf.status === "loading" || llm.status === "loading";
+  const progress = tf.status === "loading" ? tf.progress : llm.status === "loading" ? llm.progress : 0;
+  const progressText = tf.status === "loading" ? tf.progressText : llm.status === "loading" ? llm.progressText : "";
+
+  // Prefer the universal (WASM) path so the button actually works on the widest range of devices.
+  // WebGPU users still get the bigger model from the advanced section below.
+  const onTap = () => handleLoadTf();
+
+  return (
+    <section className="bg-gradient-to-br from-emerald-900 to-emerald-700 rounded-3xl p-5 sm:p-6 text-white shadow-lg">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-12 h-12 bg-white/15 backdrop-blur rounded-2xl flex items-center justify-center text-white shrink-0">
+          <Cloud size={24} />
+        </div>
+        <div>
+          <h2 className="text-lg font-black">{t("settings.simple.title")}</h2>
+          <p className="text-xs text-emerald-100/80 mt-0.5 leading-relaxed">{t("settings.simple.intro")}</p>
+        </div>
+      </div>
+
+      {/* Step-by-step explainer */}
+      <ol className="space-y-2 mb-5">
+        <SimpleStep n="1" en={t("settings.simple.step1")} />
+        <SimpleStep n="2" en={t("settings.simple.step2")} />
+        <SimpleStep n="3" en={t("settings.simple.step3")} />
+      </ol>
+
+      {ready ? (
+        <div className="bg-emerald-500/20 border border-emerald-300/40 rounded-2xl p-4 flex items-start gap-3">
+          <CheckCircle2 size={22} className="text-emerald-200 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">{t("settings.simple.ready")}</p>
+            <p className="text-xs text-emerald-100/80 mt-1 leading-relaxed">{t("settings.simple.ready.body")}</p>
+          </div>
+        </div>
+      ) : loading ? (
+        <div className="space-y-2">
+          <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden">
+            <motion.div className="h-3 bg-emerald-300" animate={{ width: `${Math.round((progress || 0) * 100)}%` }} />
+          </div>
+          <p className="text-xs text-emerald-100/80">{progressText || t("settings.localai.downloading")} · {Math.round((progress || 0) * 100)}%</p>
+          <p className="text-[11px] text-emerald-100/70 italic leading-relaxed mt-2">{t("settings.simple.downloading.note")}</p>
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={onTap}
+            className="w-full bg-white text-emerald-700 py-4 rounded-2xl text-base font-black flex items-center justify-center gap-2 hover:bg-emerald-50 transition-colors"
+          >
+            <Download size={20} />
+            {t("settings.simple.cta")}
+          </button>
+          <p className="text-[11px] text-emerald-100/70 mt-2 text-center leading-relaxed">{t("settings.simple.hint")}</p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function SimpleStep({ n, en }: { n: string; en: string }) {
+  return (
+    <li className="flex items-start gap-3 text-sm">
+      <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-xs font-black shrink-0">{n}</span>
+      <span className="text-emerald-50/90 leading-relaxed">{en}</span>
+    </li>
+  );
+}
+
+function FontSizeSection() {
+  const { t, lang } = useLanguage();
+  const [scale, setScale] = useFontScale();
+  const options: { v: FontScale; en: string; bn: string; previewPx: number }[] = [
+    { v: "sm", en: "Small", bn: "ছোট", previewPx: 13 },
+    { v: "md", en: "Medium", bn: "মাঝারি", previewPx: 15 },
+    { v: "lg", en: "Large", bn: "বড়", previewPx: 18 },
+    { v: "xl", en: "Extra Large", bn: "অতি বড়", previewPx: 22 },
+  ];
+  return (
+    <section className="bg-white border border-gray-100 rounded-3xl p-5 sm:p-6 shadow-sm">
+      <header className="flex items-start gap-3 mb-4">
+        <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+          <TypeIcon size={22} />
+        </div>
+        <div>
+          <h2 className="text-base sm:text-lg font-bold text-gray-900">{t("settings.font.title")}</h2>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 leading-relaxed">{t("settings.font.intro")}</p>
+        </div>
+      </header>
+      <div className="grid grid-cols-4 gap-2">
+        {options.map((o) => {
+          const active = scale === o.v;
+          return (
+            <button
+              key={o.v}
+              onClick={() => setScale(o.v)}
+              className={`rounded-xl border p-3 text-center transition-colors ${
+                active ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <div style={{ fontSize: `${o.previewPx}px`, fontWeight: 800, lineHeight: 1 }}>Aa</div>
+              <p className="text-[10px] font-bold uppercase tracking-wider mt-1.5">{lang === "bn" ? o.bn : o.en}</p>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }

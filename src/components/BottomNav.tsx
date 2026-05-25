@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Home, MessageSquare, Camera, Users, MoreHorizontal, BarChart3, ShieldCheck, Stethoscope, Settings as SettingsIcon, X } from "lucide-react";
+import { Home, MessageSquare, Camera, Users, MoreHorizontal, BarChart3, ShieldCheck, Stethoscope, Settings as SettingsIcon, UserRound, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
@@ -20,6 +20,7 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
   ];
 
   const moreItems = [
+    { id: "patient-profile", icon: UserRound, label: t("more.profile") },
     { id: "dashboard", icon: BarChart3, label: t("more.dashboard") },
     { id: "compliance", icon: ShieldCheck, label: t("more.compliance") },
     { id: "doctor-portal", icon: Stethoscope, label: t("more.doctor_portal") },

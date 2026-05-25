@@ -21,6 +21,60 @@ export interface DoctorProfile {
   rejectedReason?: string;
 }
 
+// ── User accounts + patient history (the "database" layer) ────────────────
+// Demo-grade local auth: SHA-256(password + salt) stored in localStorage. NOT secure for
+// real production — clearly labelled in the sign-up form. The schema mirrors what a real
+// Firestore swap would store.
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  salt: string;
+  createdAt: string;
+}
+
+export interface SavedPrescription {
+  id: string;
+  userId: string;
+  scannedAt: string;
+  doctor: {
+    name?: string;
+    bmdc?: string;
+    hospital?: string;
+    specialization?: string;
+  };
+  medicineCount: number;
+  testCount: number;
+  diagnosisHint?: string;
+  followUp?: string;
+  legibilityScore?: number;
+  imagePreview?: string; // small base64 thumbnail
+}
+
+export interface SubmittedReview {
+  id: string;
+  userId: string;
+  bmdc: string;
+  doctorName: string;
+  legibleScore: number;
+  comment?: string;
+  submittedAt: string;
+}
+
+// External doctors discovered through prescription scans. Keyed by BMDC. Merged with the
+// seeded DOCTORS list when rendering the Doctors page.
+export interface ExternalDoctor {
+  bmdc: string;
+  name: string;
+  hospital?: string;
+  specialty?: string;
+  district?: string;
+  scannedAt: string;
+  scanCount: number;
+}
+
 // AI behaviour samples that MBBS auditors review during a periodic certification.
 // Samples are seeded with representative dialogues; in production the server would also push
 // real anonymised production outputs into this collection on a sampling cadence.
@@ -183,6 +237,17 @@ export interface LegibilityRecord {
   scoreCount: number;
   avgScore: number;
   worstReason?: string;
+  lastUpdated: string;
+}
+
+// Per-doctor aggregated patient rating ("how easy was it to read this doctor's prescription").
+// Keyed by the same id as the doctor (real BMDC, or synthetic `nb_...` when none).
+export interface PatientRatingRecord {
+  bmdc: string;
+  doctorName?: string;
+  scoreSum: number;
+  scoreCount: number;
+  avgScore: number;
   lastUpdated: string;
 }
 

@@ -2,7 +2,10 @@
 // Shape intentionally mimics Firestore semantics so it can be swapped for the real SDK later.
 
 import { useEffect, useState } from "react";
-import type { DoctorProfile, AuditSample, Certification, LegibilityRecord } from "./types.ts";
+import type {
+  DoctorProfile, AuditSample, Certification, LegibilityRecord, PatientRatingRecord,
+  UserAccount, SavedPrescription, SubmittedReview, ExternalDoctor,
+} from "./types.ts";
 
 const DOCTORS_KEY = "shasthyo_doctors_v1";
 const AUDIT_SAMPLES_KEY = "shasthyo_audit_samples_v1";
@@ -10,6 +13,12 @@ const CERTIFICATIONS_KEY = "shasthyo_certifications_v1";
 const DOCTOR_SESSION_KEY = "shasthyo_doctor_session_v1";
 const PATIENT_ID_KEY = "shasthyo_patient_id_v1";
 const LEGIBILITY_KEY = "shasthyo_legibility_v1";
+const PATIENT_RATINGS_KEY = "shasthyo_patient_ratings_v1";
+const USER_ACCOUNTS_KEY = "shasthyo_user_accounts_v1";
+const USER_SESSION_KEY = "shasthyo_user_session_v1";
+const SAVED_PRESCRIPTIONS_KEY = "shasthyo_saved_prescriptions_v1";
+const SUBMITTED_REVIEWS_KEY = "shasthyo_submitted_reviews_v1";
+const EXTERNAL_DOCTORS_KEY = "shasthyo_external_doctors_v1";
 
 type Listener = () => void;
 const listeners: Map<string, Set<Listener>> = new Map();
@@ -82,6 +91,8 @@ export function upsertDoctor(d: DoctorProfile): void {
   if (idx >= 0) all[idx] = d;
   else all.push(d);
   rawSet(DOCTORS_KEY, all);
+  // Mirror to Firestore so MBBS auditor onboarding survives across devices.
+  import("./db.ts").then((m) => m.writeDoctorAccount(d)).catch(() => {});
 }
 
 // ── Audit samples ───────────────────────────────────────────────────────────
@@ -95,6 +106,7 @@ export function updateAuditSample(id: string, patch: Partial<AuditSample>): void
   if (idx < 0) return;
   all[idx] = { ...all[idx], ...patch };
   rawSet(AUDIT_SAMPLES_KEY, all);
+  import("./db.ts").then((m) => m.writeAuditSample(all[idx])).catch(() => {});
 }
 
 export function resetAuditRatings(): void {
@@ -117,6 +129,7 @@ export function listCertifications(): Certification[] {
 
 export function addCertification(c: Certification): void {
   rawSet(CERTIFICATIONS_KEY, [c, ...listCertifications()]);
+  import("./db.ts").then((m) => m.writeCertification(c)).catch(() => {});
 }
 
 export function latestCertification(): Certification | undefined {
@@ -165,6 +178,49 @@ export function addLegibilityScore(bmdc: string, score: number, doctorName?: str
     };
   }
   rawSet(LEGIBILITY_KEY, all);
+  const written = all.find((r) => r.bmdc === bmdc);
+  if (written) import("./db.ts").then((m) => m.writeLegibility(written)).catch(() => {});
+}
+
+// ── Patient ratings aggregate (running average per doctor, public collection) ──
+export function listPatientRatings(): PatientRatingRecord[] {
+  return rawGet<PatientRatingRecord[]>(PATIENT_RATINGS_KEY, []);
+}
+
+export function getPatientRatingForDoctor(bmdc: string): PatientRatingRecord | undefined {
+  return listPatientRatings().find((r) => r.bmdc === bmdc);
+}
+
+// Add a fresh prescription-reading rating for a doctor. Aggregates running average.
+export function addPatientRating(bmdc: string, score: number, doctorName?: string): void {
+  if (!bmdc) return;
+  const all = listPatientRatings();
+  const idx = all.findIndex((r) => r.bmdc === bmdc);
+  if (idx < 0) {
+    all.push({
+      bmdc,
+      doctorName,
+      scoreSum: score,
+      scoreCount: 1,
+      avgScore: score,
+      lastUpdated: new Date().toISOString(),
+    });
+  } else {
+    const r = all[idx];
+    const sum = r.scoreSum + score;
+    const cnt = r.scoreCount + 1;
+    all[idx] = {
+      ...r,
+      doctorName: doctorName || r.doctorName,
+      scoreSum: sum,
+      scoreCount: cnt,
+      avgScore: Math.round((sum / cnt) * 10) / 10,
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+  rawSet(PATIENT_RATINGS_KEY, all);
+  const written = all.find((r) => r.bmdc === bmdc);
+  if (written) import("./db.ts").then((m) => m.writePatientRating(written)).catch(() => {});
 }
 
 // ── Doctor session (mock auth) ──────────────────────────────────────────────
@@ -311,6 +367,185 @@ export function seedAuditSamplesIfEmpty(): void {
   rawSet(AUDIT_SAMPLES_KEY, samples);
 }
 
+// ── User accounts (real Firebase Auth, mirrored into the legacy cache) ────────────────
+// Sign-up / sign-in now delegate to Firebase Auth (email/password). The Firestore listener in
+// db.ts mirrors the resulting user record back into USER_ACCOUNTS_KEY + USER_SESSION_KEY so the
+// existing useCurrentUser() hook keeps reading sync from localStorage as before.
+
+import {
+  fbSignIn, fbSignUp, fbSignOut, firebaseConfigStatus,
+} from "./firebase.ts";
+
+function genId(prefix: string): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+}
+
+export function listUsers(): UserAccount[] {
+  return rawGet<UserAccount[]>(USER_ACCOUNTS_KEY, []);
+}
+
+export function getUserByEmail(email: string): UserAccount | undefined {
+  return listUsers().find((u) => u.email.toLowerCase() === email.toLowerCase());
+}
+
+function mapFirebaseError(e: any): string {
+  const code = String(e?.code || e?.message || "");
+  if (code.includes("auth/email-already-in-use")) return "ACCOUNT_EXISTS";
+  if (code.includes("auth/invalid-email") || code.includes("auth/missing-email")) return "EMAIL_REQUIRED";
+  if (code.includes("auth/weak-password")) return "PASSWORD_TOO_SHORT";
+  if (code.includes("auth/user-not-found")) return "NO_ACCOUNT";
+  if (code.includes("auth/wrong-password") || code.includes("auth/invalid-credential")) return "WRONG_PASSWORD";
+  if (code.includes("auth/network-request-failed")) return "NETWORK";
+  if (code === "FIREBASE_NOT_CONFIGURED") return "FIREBASE_NOT_CONFIGURED";
+  return code || "UNKNOWN";
+}
+
+export async function signUp(name: string, email: string, password: string): Promise<UserAccount> {
+  if (!name.trim()) throw new Error("NAME_REQUIRED");
+  if (!email.trim()) throw new Error("EMAIL_REQUIRED");
+  if (password.length < 6) throw new Error("PASSWORD_TOO_SHORT");
+  if (firebaseConfigStatus !== "ok") throw new Error("FIREBASE_NOT_CONFIGURED");
+  try {
+    const u = await fbSignUp(name, email, password);
+    // The auth state listener in db.ts will mirror this into the cache. Return a UserAccount-
+    // shaped record so the caller's signature stays the same.
+    return {
+      id: u.uid,
+      email: u.email,
+      name: u.displayName,
+      passwordHash: "fb",
+      salt: "fb",
+      createdAt: u.createdAt,
+    };
+  } catch (e: any) {
+    throw new Error(mapFirebaseError(e));
+  }
+}
+
+export async function signIn(email: string, password: string): Promise<UserAccount> {
+  if (firebaseConfigStatus !== "ok") throw new Error("FIREBASE_NOT_CONFIGURED");
+  try {
+    const u = await fbSignIn(email, password);
+    return {
+      id: u.uid,
+      email: u.email,
+      name: u.displayName,
+      passwordHash: "fb",
+      salt: "fb",
+      createdAt: u.createdAt,
+    };
+  } catch (e: any) {
+    throw new Error(mapFirebaseError(e));
+  }
+}
+
+export function signOut(): void {
+  void fbSignOut();
+  // Optimistic local clear — the auth listener will also clear, but doing it here keeps the UI
+  // responsive without waiting for a round trip.
+  window.localStorage.removeItem(USER_SESSION_KEY);
+  emit(USER_SESSION_KEY);
+}
+
+export function getCurrentUser(): UserAccount | null {
+  const id = rawGet<string | null>(USER_SESSION_KEY, null);
+  if (!id) return null;
+  return listUsers().find((u) => u.id === id) || null;
+}
+
+export function useCurrentUser(): UserAccount | null {
+  const [u, setU] = useState<UserAccount | null>(getCurrentUser());
+  useEffect(() => {
+    const fn = () => setU(getCurrentUser());
+    const a = subscribe(USER_SESSION_KEY, fn);
+    const b = subscribe(USER_ACCOUNTS_KEY, fn);
+    return () => { a(); b(); };
+  }, []);
+  return u;
+}
+
+// ── Saved prescriptions (patient history) ───────────────────────────────────
+export function listSavedPrescriptions(userId?: string): SavedPrescription[] {
+  const all = rawGet<SavedPrescription[]>(SAVED_PRESCRIPTIONS_KEY, []);
+  return userId ? all.filter((p) => p.userId === userId) : all;
+}
+
+export function saveScannedPrescription(rec: Omit<SavedPrescription, "id" | "scannedAt">): SavedPrescription {
+  const full: SavedPrescription = {
+    ...rec,
+    id: genId("rx"),
+    scannedAt: new Date().toISOString(),
+  };
+  rawSet(SAVED_PRESCRIPTIONS_KEY, [full, ...listSavedPrescriptions()]);
+  if (full.userId) import("./db.ts").then((m) => m.writePrescription(full.userId, full)).catch(() => {});
+  return full;
+}
+
+export function deleteSavedPrescription(id: string): void {
+  const target = listSavedPrescriptions().find((p) => p.id === id);
+  const all = listSavedPrescriptions().filter((p) => p.id !== id);
+  rawSet(SAVED_PRESCRIPTIONS_KEY, all);
+  if (target?.userId) import("./db.ts").then((m) => m.deletePrescription(target.userId, id)).catch(() => {});
+}
+
+// ── Submitted reviews (one per scan, simple legibility 1-5) ────────────────
+export function listSubmittedReviews(userId?: string): SubmittedReview[] {
+  const all = rawGet<SubmittedReview[]>(SUBMITTED_REVIEWS_KEY, []);
+  return userId ? all.filter((r) => r.userId === userId) : all;
+}
+
+export function saveSubmittedReview(rec: Omit<SubmittedReview, "id" | "submittedAt">): SubmittedReview {
+  const full: SubmittedReview = {
+    ...rec,
+    id: genId("rev"),
+    submittedAt: new Date().toISOString(),
+  };
+  rawSet(SUBMITTED_REVIEWS_KEY, [full, ...listSubmittedReviews()]);
+  if (full.userId) import("./db.ts").then((m) => m.writeReview(full.userId, full)).catch(() => {});
+  // Also aggregate into the public per-doctor rating so the Doctors page can show a real
+  // average instead of "new" forever.
+  if (full.bmdc) addPatientRating(full.bmdc, full.legibleScore, full.doctorName);
+  return full;
+}
+
+// ── External doctors (auto-registered from scanned prescriptions) ──────────
+export function listExternalDoctors(): ExternalDoctor[] {
+  return rawGet<ExternalDoctor[]>(EXTERNAL_DOCTORS_KEY, []);
+}
+
+export function upsertExternalDoctor(d: Omit<ExternalDoctor, "scannedAt" | "scanCount"> & { scanCount?: number }): ExternalDoctor {
+  const all = listExternalDoctors();
+  const idx = all.findIndex((x) => x.bmdc === d.bmdc);
+  if (idx >= 0) {
+    const merged: ExternalDoctor = {
+      ...all[idx],
+      name: d.name || all[idx].name,
+      hospital: d.hospital || all[idx].hospital,
+      specialty: d.specialty || all[idx].specialty,
+      district: d.district || all[idx].district,
+      scanCount: (all[idx].scanCount || 0) + 1,
+      scannedAt: new Date().toISOString(),
+    };
+    all[idx] = merged;
+    rawSet(EXTERNAL_DOCTORS_KEY, all);
+    import("./db.ts").then((m) => m.writeExternalDoctor(merged)).catch(() => {});
+    return merged;
+  }
+  const fresh: ExternalDoctor = {
+    bmdc: d.bmdc,
+    name: d.name,
+    hospital: d.hospital,
+    specialty: d.specialty,
+    district: d.district,
+    scanCount: 1,
+    scannedAt: new Date().toISOString(),
+  };
+  all.push(fresh);
+  rawSet(EXTERNAL_DOCTORS_KEY, all);
+  import("./db.ts").then((m) => m.writeExternalDoctor(fresh)).catch(() => {});
+  return fresh;
+}
+
 export const KEYS = {
   DOCTORS_KEY,
   AUDIT_SAMPLES_KEY,
@@ -318,4 +553,10 @@ export const KEYS = {
   DOCTOR_SESSION_KEY,
   PATIENT_ID_KEY,
   LEGIBILITY_KEY,
+  PATIENT_RATINGS_KEY,
+  USER_ACCOUNTS_KEY,
+  USER_SESSION_KEY,
+  SAVED_PRESCRIPTIONS_KEY,
+  SUBMITTED_REVIEWS_KEY,
+  EXTERNAL_DOCTORS_KEY,
 };

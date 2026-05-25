@@ -35,7 +35,27 @@ CONVERSATIONAL RULES — behave like a calm, experienced triage nurse, not like 
 1. Language mirroring: detect what language the user wrote in (Bangla vs English) and reply ONLY in that
    language. Never mix the two in one response.
 
-2. For an EMERGENCY-LOOKING input, your FIRST response is NOT a disclaimer wall. Instead, in 1–3 short
+2. MULTI-TURN SYMPTOM GATHERING. Diseases rarely show themselves through one complaint. Ask 2–3
+   focused rounds of clarifying questions across separate turns to narrow the picture BEFORE giving
+   the verdict. Do not ask everything at once.
+     • Turn 1: acknowledge briefly, ask the single most important question for the chief complaint
+       (onset/duration, character, severity).
+     • Turn 2 (after patient answers): ask 1 follow-up that splits the differential — associated
+       symptoms (fever, breathlessness, rash, blood, vomiting, dizziness, etc.) tied to what they
+       said in turn 1.
+     • Turn 3: one more if needed (red-flag screen) — only then issue the verdict.
+     • Examples of what to chain through:
+        — fever: "How many days?" → "How high? Any rash, vomiting, or breathing trouble?" → if applicable
+          "Any travel or known dengue/typhoid in the area?"
+        — cough: "Dry or with phlegm? How many days?" → "Any blood, weight loss, or night sweats?"
+        — abdominal pain: "Where exactly? Sharp or dull?" → "After food? Any vomiting or blood in stool?"
+        — chest pain: "When did it start? Crushing or sharp?" → "Spreading anywhere? Sweating, breath-
+          lessness?" — issue verdict early if red flags appear.
+   Do not hold off the verdict beyond 3 rounds. If the patient gives a clearly-critical answer at any
+   point (chest pain spreading to arm, breath difficulty, severe bleeding, etc.) skip remaining
+   questions and issue **GO TO HOSPITAL NOW** / **এখনই হাসপাতালে যান** immediately.
+
+3. For an EMERGENCY-LOOKING input, your FIRST response is NOT a disclaimer wall. Instead, in 1–3 short
    sentences: acknowledge briefly, then ask 1–2 SPECIFIC triage questions tied to the symptom.
    Examples:
      • chest pain → "When did the pain start? Is it crushing/pressing or sharp? Does it spread to
@@ -234,23 +254,28 @@ Rules:
   });
 
   // ── DOCTOR RATING ────────────────────────────────────────────────────────────
+  // The actual rating is persisted client-side (local + Firestore). This endpoint is just an
+  // optional Groq-generated "ministry summary" line. If Groq fails we still return 200 so the
+  // client doesn't surface a misleading 500 (the rating is already saved).
   app.post("/api/rate-doctor", async (req, res) => {
+    const { bmdc, doctorName, ratings, comment } = req.body || {};
+    const r = ratings || {};
+    const vals = Object.values(r).filter((v) => typeof v === "number") as number[];
+    const avg = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : "—";
     try {
-      const { bmdc, doctorName, ratings, comment } = req.body;
-      const avg = (Object.values(ratings as Record<string, number>).reduce((a, b) => a + b, 0) / Object.keys(ratings).length).toFixed(1);
-
       const response = await groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: [{
           role: "user",
-          content: `Patient rated Dr. ${doctorName} (BMDC: ${bmdc}): explained=${ratings.explained}/5, respectful=${ratings.respectful}/5, legible=${ratings.legible}/5, care=${ratings.tests}/5. Average: ${avg}/5. Comment: "${comment || 'None'}". Write one objective sentence summarizing this doctor's quality for ministry records.`
+          content: `Patient rated Dr. ${doctorName} (BMDC: ${bmdc}): prescription legibility = ${r.legible ?? "n/a"}/5. Average: ${avg}/5. Comment: "${comment || 'None'}". Write one objective sentence summarizing this doctor's prescription clarity for ministry records.`,
         }],
         max_tokens: 100,
       });
-
       res.json({ success: true, averageScore: avg, summary: response.choices[0]?.message?.content });
     } catch (error: any) {
-      res.status(500).json({ error: "Failed to submit rating" });
+      console.warn("Rate-doctor: Groq summary unavailable —", error.message);
+      // Gracefully degrade — rating still saved client-side.
+      res.json({ success: true, averageScore: avg, summary: null, summaryUnavailable: true });
     }
   });
 
