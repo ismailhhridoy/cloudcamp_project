@@ -5,51 +5,17 @@ import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { User } from "firebase/auth";
 import { useStore, KEYS, useCurrentUser, saveSubmittedReview } from "../lib/store.ts";
-import type { LegibilityRecord, ExternalDoctor } from "../lib/types.ts";
+import type { LegibilityRecord, ExternalDoctor, PatientRatingRecord } from "../lib/types.ts";
 import { usePatientProfile } from "../lib/profile.ts";
 import { requestGeolocation, haversineKm } from "../lib/distance.ts";
 
-// Doctor seed. Score model simplified per request: only patient prescription-reading rating is
-// kept as a stored score. AI handwriting score comes from the live legibility records.
-const DOCTORS = [
-  { name: "Dr. Anisur Rahman", hospital: "Dhaka Medical College Hospital", bmdc: "A-54321", reviews: 156, verified: true, specialty: "General Medicine", phone: "+880-2-55165088", district: "Dhaka", lat: 23.7256, lng: 90.3961, prescriptionScore: 4.7 },
-  { name: "Dr. Fatema Begum", hospital: "Apollo Hospitals Dhaka", bmdc: "A-98765", reviews: 89, verified: true, specialty: "Gynecology & Obstetrics", phone: "+880-2-9829019", district: "Dhaka", lat: 23.8113, lng: 90.4308, prescriptionScore: 4.2 },
-  { name: "Dr. Kamal Hossain", hospital: "Rajshahi Medical College", bmdc: "A-12345", reviews: 45, verified: true, specialty: "Pediatrics", phone: "+880-721-772150", district: "Rajshahi", lat: 24.3681, lng: 88.6055, prescriptionScore: 4.0 },
-  { name: "Dr. Selina Akhter", hospital: "Chittagong Medical College", bmdc: "A-67890", reviews: 210, verified: true, specialty: "Internal Medicine", phone: "+880-31-619995", district: "Chittagong", lat: 22.3597, lng: 91.8311, prescriptionScore: 4.8 },
-  { name: "Dr. Jahangir Alam", hospital: "Sylhet MAG Osmani Medical", bmdc: "A-23456", reviews: 67, verified: true, specialty: "Cardiology", phone: "+880-821-714900", district: "Sylhet", lat: 24.9008, lng: 91.8730, prescriptionScore: 4.1 },
-  { name: "Dr. Nasrin Sultana", hospital: "Khulna Medical College", bmdc: "A-34567", reviews: 123, verified: true, specialty: "Dermatology", phone: "+880-41-731040", district: "Khulna", lat: 22.8458, lng: 89.5505, prescriptionScore: 4.4 },
-  { name: "Dr. Mahbub Hasan", hospital: "Barisal Sher-e-Bangla Medical College", bmdc: "A-44521", reviews: 92, verified: true, specialty: "Pediatrics", phone: "+880-431-2173546", district: "Barisal", lat: 22.7010, lng: 90.3500, prescriptionScore: 3.4 },
-  { name: "Dr. Roksana Khanam", hospital: "Mymensingh Medical College", bmdc: "A-58219", reviews: 178, verified: true, specialty: "Gynecology & Obstetrics", phone: "+880-91-66063", district: "Mymensingh", lat: 24.7471, lng: 90.4203, prescriptionScore: 4.5 },
-  { name: "Dr. Tariq Aziz", hospital: "Rangpur Medical College", bmdc: "A-61932", reviews: 53, verified: true, specialty: "Internal Medicine", phone: "+880-521-66205", district: "Rangpur", lat: 25.7439, lng: 89.2752, prescriptionScore: 3.5 },
-  { name: "Dr. Sumi Akter", hospital: "Cumilla Medical College", bmdc: "A-70214", reviews: 71, verified: true, specialty: "Dermatology", phone: "+880-81-76061", district: "Cumilla", lat: 23.4682, lng: 91.1788, prescriptionScore: 4.3 },
-  { name: "Dr. Imran Hossain", hospital: "Jashore Medical College", bmdc: "A-78435", reviews: 64, verified: true, specialty: "General Medicine", phone: "+880-421-66666", district: "Jashore", lat: 23.1664, lng: 89.2086, prescriptionScore: 4.0 },
-  { name: "Dr. Nahid Rezwana", hospital: "Dinajpur Medical College", bmdc: "A-82155", reviews: 108, verified: true, specialty: "Cardiology", phone: "+880-531-65111", district: "Dinajpur", lat: 25.6217, lng: 88.6354, prescriptionScore: 4.6 },
-  { name: "Dr. Faruque Hossain", hospital: "Faridpur Medical College", bmdc: "A-65318", reviews: 47, verified: true, specialty: "Pediatrics", phone: "+880-631-63133", district: "Faridpur", lat: 23.6070, lng: 89.8429, prescriptionScore: 3.0 },
-  { name: "Dr. Sabina Yasmin", hospital: "Noakhali Medical College", bmdc: "A-91402", reviews: 86, verified: true, specialty: "Gynecology & Obstetrics", phone: "+880-321-71500", district: "Noakhali", lat: 22.8254, lng: 91.0982, prescriptionScore: 4.2 },
-];
+// No seed data — doctors only appear as patients scan prescriptions. Auto-registration uses the
+// BMDC number as the id when visible, falling back to a synthetic id derived from name+hospital.
+// `bmdc` starting with `nb_` means "no BMDC on prescription".
 
 // Simplified to two filters: doctors who need handwriting improvement vs already-good ones.
 const FILTERS = ["needs_training", "already_good"] as const;
 type FilterKey = (typeof FILTERS)[number];
-
-// District centres (subset of the hospitals helper) for "nearest" sort without geolocation.
-const DISTRICT_CENTRES: Record<string, [number, number]> = {
-  Dhaka: [23.8103, 90.4125], Chittagong: [22.3569, 91.7832], Sylhet: [24.8949, 91.8687],
-  Rajshahi: [24.3636, 88.6241], Khulna: [22.8456, 89.5403], Barisal: [22.7010, 90.3535],
-  Mymensingh: [24.7471, 90.4203], Rangpur: [25.7439, 89.2752], Cumilla: [23.4607, 91.1809],
-  Noakhali: [22.8324, 91.0976], Jashore: [23.1664, 89.2086], Dinajpur: [25.6217, 88.6354],
-  Faridpur: [23.6070, 89.8429],
-};
-
-function distanceKm(a: [number, number], b: [number, number]): number {
-  const R = 6371;
-  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(x)));
-}
 
 export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => void; user: User | null }) {
   const { t, lang } = useLanguage();
@@ -57,32 +23,32 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
   const [filter, setFilter] = useState<FilterKey>("needs_training");
   const [selected, setSelected] = useState<any | null>(null);
   const legibility = useStore<LegibilityRecord[]>(KEYS.LEGIBILITY_KEY, []);
+  const patientRatings = useStore<PatientRatingRecord[]>(KEYS.PATIENT_RATINGS_KEY, []);
   const externalDoctors = useStore<ExternalDoctor[]>(KEYS.EXTERNAL_DOCTORS_KEY, []);
   const legibilityByBmdc = new Map(legibility.map((r) => [r.bmdc, r] as const));
+  const ratingByBmdc = new Map(patientRatings.map((r) => [r.bmdc, r] as const));
   const lookupLegibility = (bmdc: string) => legibilityByBmdc.get(bmdc);
-  const profile = usePatientProfile();
+  const lookupPatientRating = (bmdc: string) => ratingByBmdc.get(bmdc);
 
-  // Merge seeded doctors + external (auto-registered from scanned prescriptions).
-  // Same BMDC dedup wins to the seeded record.
+  // Build the doctor list strictly from auto-registered records.
   const allDoctors = useMemo(() => {
-    const seededBmdcs = new Set(DOCTORS.map(d => d.bmdc));
-    const externalMapped = externalDoctors
-      .filter(e => !seededBmdcs.has(e.bmdc))
-      .map(e => ({
-        name: e.name,
-        hospital: e.hospital || "",
-        bmdc: e.bmdc,
-        reviews: 0,
-        verified: false,
-        specialty: e.specialty || "General",
-        phone: "",
-        district: e.district || (profile.district || ""),
-        lat: undefined as number | undefined,
-        lng: undefined as number | undefined,
-        prescriptionScore: 0,
-      }));
-    return [...DOCTORS, ...externalMapped];
-  }, [externalDoctors, profile.district]);
+    return externalDoctors.map((e) => ({
+      name: e.name,
+      hospital: e.hospital || "",
+      bmdc: e.bmdc,
+      bmdcKnown: !e.bmdc.startsWith("nb_"),
+      reviews: 0,
+      verified: false,
+      specialty: e.specialty || "General",
+      phone: "",
+      district: e.district || "",
+      lat: undefined as number | undefined,
+      lng: undefined as number | undefined,
+      prescriptionScore: 0,
+      scanCount: e.scanCount || 0,
+      scannedAt: e.scannedAt,
+    }));
+  }, [externalDoctors]);
 
   const filtered = allDoctors.filter(d => {
     const matchSearch =
@@ -136,17 +102,38 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
       </div>
 
       <div className="p-4 lg:p-6 space-y-3 overflow-y-auto pb-24">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
-          {filter === "needs_training"
-            ? (lang === "bn" ? `${filtered.length} জন ডাক্তারের উন্নতি দরকার` : `${filtered.length} doctors need improvement`)
-            : (lang === "bn" ? `${filtered.length} জন ডাক্তার ইতিমধ্যে ভালো` : `${filtered.length} doctors already good`)}
-        </p>
-        {filtered.length === 0 && (
-          <div className="text-center py-12 space-y-2">
-            <AlertCircle size={32} className="text-gray-300 mx-auto" />
-            <p className="text-gray-400 text-sm">{lang === "bn" ? "কোনো ডাক্তার পাওয়া যায়নি" : "No doctors found"}</p>
+        {allDoctors.length === 0 ? (
+          <div className="text-center py-16 space-y-3 max-w-md mx-auto">
+            <UserRound size={36} className="text-gray-300 mx-auto" />
+            <p className="text-sm font-bold text-gray-700">
+              {lang === "bn" ? "এখনো কোনো ডাক্তার তালিকায় নেই" : "No doctors in the registry yet"}
+            </p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              {lang === "bn"
+                ? "যখন রোগীরা প্রেসক্রিপশন স্ক্যান করবেন, ডাক্তারের প্রোফাইল স্বয়ংক্রিয়ভাবে এখানে যোগ হবে। BMDC না থাকলেও প্রোফাইল তৈরি হয়।"
+                : "Doctor profiles are added automatically as patients scan prescriptions. Profiles are created even when no BMDC number is visible on the prescription."}
+            </p>
           </div>
+        ) : (
+          <>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
+              {filter === "needs_training"
+                ? (lang === "bn" ? `${filtered.length} জন ডাক্তারের উন্নতি দরকার` : `${filtered.length} doctors need improvement`)
+                : (lang === "bn" ? `${filtered.length} জন ডাক্তার ইতিমধ্যে ভালো` : `${filtered.length} doctors already good`)}
+            </p>
+            {filtered.length === 0 && (
+              <div className="text-center py-12 space-y-2">
+                <AlertCircle size={32} className="text-gray-300 mx-auto" />
+                <p className="text-gray-400 text-sm">
+                  {filter === "needs_training"
+                    ? (lang === "bn" ? "ভালো খবর — কোনো ডাক্তারের উন্নতি প্রয়োজন নেই।" : "Good news — no doctors need improvement.")
+                    : (lang === "bn" ? "এখনো কোনো ডাক্তারের ভালো স্কোর নেই।" : "No doctors with a good score yet.")}
+                </p>
+              </div>
+            )}
+          </>
         )}
+        {allDoctors.length > 0 && (
         <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-4">
         {filtered.map((doc, i) => {
           const leg = lookupLegibility(doc.bmdc);
@@ -174,8 +161,19 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
                       <span className="text-[11px] truncate">{doc.hospital}{doc.district ? ` · ${doc.district}` : ""}</span>
                     </div>
                   )}
-                  <div className="flex items-center justify-end mt-2">
-                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{doc.bmdc}</span>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <span className="text-[10px] font-medium text-gray-400">
+                      {doc.scanCount || 0} {lang === "bn" ? "স্ক্যান" : "scans"}
+                    </span>
+                    {doc.bmdcKnown ? (
+                      <span className="text-[10px] font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded font-mono">
+                        {doc.bmdc}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                        {lang === "bn" ? "BMDC নেই" : "No BMDC"}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -204,22 +202,30 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
                     </div>
                   );
                 })()}
-                <div className="rounded-lg border border-gray-100 bg-gray-50 p-2 flex items-center gap-2">
-                  <Star size={14} className="text-amber-400 fill-amber-400 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      {lang === "bn" ? "প্রেসক্রিপশন (রোগী)" : "Prescription (patient)"}
-                    </p>
-                    <p className="text-xs font-bold text-gray-900">
-                      {doc.prescriptionScore > 0 ? `${doc.prescriptionScore.toFixed(1)} / 5` : (lang === "bn" ? "নতুন" : "new")}
-                    </p>
-                  </div>
-                </div>
+                {(() => {
+                  const rate = lookupPatientRating(doc.bmdc);
+                  return (
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-2 flex items-center gap-2">
+                      <Star size={14} className="text-amber-400 fill-amber-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          {lang === "bn" ? "প্রেসক্রিপশন (রোগী)" : "Prescription (patient)"}
+                        </p>
+                        <p className="text-xs font-bold text-gray-900">
+                          {rate
+                            ? <>{rate.avgScore} / 5 <span className="font-medium text-gray-400">· {rate.scoreCount}</span></>
+                            : (lang === "bn" ? "রেটিং নেই" : "no ratings")}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           );
         })}
         </div>
+        )}
       </div>
 
       {/* Rating modal */}

@@ -254,23 +254,28 @@ Rules:
   });
 
   // ── DOCTOR RATING ────────────────────────────────────────────────────────────
+  // The actual rating is persisted client-side (local + Firestore). This endpoint is just an
+  // optional Groq-generated "ministry summary" line. If Groq fails we still return 200 so the
+  // client doesn't surface a misleading 500 (the rating is already saved).
   app.post("/api/rate-doctor", async (req, res) => {
+    const { bmdc, doctorName, ratings, comment } = req.body || {};
+    const r = ratings || {};
+    const vals = Object.values(r).filter((v) => typeof v === "number") as number[];
+    const avg = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : "—";
     try {
-      const { bmdc, doctorName, ratings, comment } = req.body;
-      const avg = (Object.values(ratings as Record<string, number>).reduce((a, b) => a + b, 0) / Object.keys(ratings).length).toFixed(1);
-
       const response = await groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: [{
           role: "user",
-          content: `Patient rated Dr. ${doctorName} (BMDC: ${bmdc}): explained=${ratings.explained}/5, respectful=${ratings.respectful}/5, legible=${ratings.legible}/5, care=${ratings.tests}/5. Average: ${avg}/5. Comment: "${comment || 'None'}". Write one objective sentence summarizing this doctor's quality for ministry records.`
+          content: `Patient rated Dr. ${doctorName} (BMDC: ${bmdc}): prescription legibility = ${r.legible ?? "n/a"}/5. Average: ${avg}/5. Comment: "${comment || 'None'}". Write one objective sentence summarizing this doctor's prescription clarity for ministry records.`,
         }],
         max_tokens: 100,
       });
-
       res.json({ success: true, averageScore: avg, summary: response.choices[0]?.message?.content });
     } catch (error: any) {
-      res.status(500).json({ error: "Failed to submit rating" });
+      console.warn("Rate-doctor: Groq summary unavailable —", error.message);
+      // Gracefully degrade — rating still saved client-side.
+      res.json({ success: true, averageScore: avg, summary: null, summaryUnavailable: true });
     }
   });
 

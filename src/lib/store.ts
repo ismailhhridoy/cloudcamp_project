@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import type {
-  DoctorProfile, AuditSample, Certification, LegibilityRecord,
+  DoctorProfile, AuditSample, Certification, LegibilityRecord, PatientRatingRecord,
   UserAccount, SavedPrescription, SubmittedReview, ExternalDoctor,
 } from "./types.ts";
 
@@ -13,6 +13,7 @@ const CERTIFICATIONS_KEY = "shasthyo_certifications_v1";
 const DOCTOR_SESSION_KEY = "shasthyo_doctor_session_v1";
 const PATIENT_ID_KEY = "shasthyo_patient_id_v1";
 const LEGIBILITY_KEY = "shasthyo_legibility_v1";
+const PATIENT_RATINGS_KEY = "shasthyo_patient_ratings_v1";
 const USER_ACCOUNTS_KEY = "shasthyo_user_accounts_v1";
 const USER_SESSION_KEY = "shasthyo_user_session_v1";
 const SAVED_PRESCRIPTIONS_KEY = "shasthyo_saved_prescriptions_v1";
@@ -179,6 +180,47 @@ export function addLegibilityScore(bmdc: string, score: number, doctorName?: str
   rawSet(LEGIBILITY_KEY, all);
   const written = all.find((r) => r.bmdc === bmdc);
   if (written) import("./db.ts").then((m) => m.writeLegibility(written)).catch(() => {});
+}
+
+// ── Patient ratings aggregate (running average per doctor, public collection) ──
+export function listPatientRatings(): PatientRatingRecord[] {
+  return rawGet<PatientRatingRecord[]>(PATIENT_RATINGS_KEY, []);
+}
+
+export function getPatientRatingForDoctor(bmdc: string): PatientRatingRecord | undefined {
+  return listPatientRatings().find((r) => r.bmdc === bmdc);
+}
+
+// Add a fresh prescription-reading rating for a doctor. Aggregates running average.
+export function addPatientRating(bmdc: string, score: number, doctorName?: string): void {
+  if (!bmdc) return;
+  const all = listPatientRatings();
+  const idx = all.findIndex((r) => r.bmdc === bmdc);
+  if (idx < 0) {
+    all.push({
+      bmdc,
+      doctorName,
+      scoreSum: score,
+      scoreCount: 1,
+      avgScore: score,
+      lastUpdated: new Date().toISOString(),
+    });
+  } else {
+    const r = all[idx];
+    const sum = r.scoreSum + score;
+    const cnt = r.scoreCount + 1;
+    all[idx] = {
+      ...r,
+      doctorName: doctorName || r.doctorName,
+      scoreSum: sum,
+      scoreCount: cnt,
+      avgScore: Math.round((sum / cnt) * 10) / 10,
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+  rawSet(PATIENT_RATINGS_KEY, all);
+  const written = all.find((r) => r.bmdc === bmdc);
+  if (written) import("./db.ts").then((m) => m.writePatientRating(written)).catch(() => {});
 }
 
 // ── Doctor session (mock auth) ──────────────────────────────────────────────
@@ -460,6 +502,9 @@ export function saveSubmittedReview(rec: Omit<SubmittedReview, "id" | "submitted
   };
   rawSet(SUBMITTED_REVIEWS_KEY, [full, ...listSubmittedReviews()]);
   if (full.userId) import("./db.ts").then((m) => m.writeReview(full.userId, full)).catch(() => {});
+  // Also aggregate into the public per-doctor rating so the Doctors page can show a real
+  // average instead of "new" forever.
+  if (full.bmdc) addPatientRating(full.bmdc, full.legibleScore, full.doctorName);
   return full;
 }
 
@@ -508,6 +553,7 @@ export const KEYS = {
   DOCTOR_SESSION_KEY,
   PATIENT_ID_KEY,
   LEGIBILITY_KEY,
+  PATIENT_RATINGS_KEY,
   USER_ACCOUNTS_KEY,
   USER_SESSION_KEY,
   SAVED_PRESCRIPTIONS_KEY,

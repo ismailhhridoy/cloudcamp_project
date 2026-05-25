@@ -26,7 +26,7 @@ import {
 import { KEYS } from "./store.ts";
 import type {
   SavedPrescription, SubmittedReview, LegibilityRecord, ExternalDoctor,
-  AuditSample, Certification, DoctorProfile, PatientProfile,
+  AuditSample, Certification, DoctorProfile, PatientProfile, PatientRatingRecord,
 } from "./types.ts";
 
 const CONNECTED = () => firebaseConfigStatus === "ok";
@@ -179,6 +179,12 @@ function startPublicSubscriptions(): void {
     rawSet(KEYS.LEGIBILITY_KEY, mergeById(local, remote, (x) => x.bmdc));
   }, (e) => console.error("[db] legibilityScores listener error:", e?.message || e)));
 
+  subs.push(onSnapshot(collection(db, "patientRatings"), (snap) => {
+    const remote: PatientRatingRecord[] = snap.docs.map((d) => d.data() as PatientRatingRecord);
+    const local = rawGet<PatientRatingRecord[]>(KEYS.PATIENT_RATINGS_KEY, []);
+    rawSet(KEYS.PATIENT_RATINGS_KEY, mergeById(local, remote, (x) => x.bmdc));
+  }, (e) => console.error("[db] patientRatings listener error:", e?.message || e)));
+
   subs.push(onSnapshot(collection(db, "doctorAccounts"), (snap) => {
     const remote: DoctorProfile[] = snap.docs.map((d) => d.data() as DoctorProfile);
     const local = rawGet<DoctorProfile[]>(KEYS.DOCTORS_KEY, []);
@@ -253,6 +259,10 @@ export function writeExternalDoctor(d: ExternalDoctor): void {
 
 export function writeLegibility(rec: LegibilityRecord): void {
   safeWrite(() => setDoc(doc(getDb(), "legibilityScores", rec.bmdc), clean(rec) as DocumentData, { merge: true }), "legibility");
+}
+
+export function writePatientRating(rec: PatientRatingRecord): void {
+  safeWrite(() => setDoc(doc(getDb(), "patientRatings", rec.bmdc), clean(rec) as DocumentData, { merge: true }), "patientRating");
 }
 
 export function writeDoctorAccount(d: DoctorProfile): void {

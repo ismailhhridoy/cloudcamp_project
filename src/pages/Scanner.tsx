@@ -87,27 +87,31 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
       if (data.error) throw new Error(data.error);
       setResult(data as ExtractedPrescription);
 
-      // Aggregate AI legibility score against the doctor's BMDC for the Doctors list.
-      if (data?.doctor?.bmdc && typeof data?.legibility_score === "number") {
-        addLegibilityScore(
-          String(data.doctor.bmdc).trim(),
-          Number(data.legibility_score),
-          data.doctor.name || undefined,
-          data.legibility_reason || undefined
-        );
-      }
-
-      // Auto-register the doctor in our directory (BMDC = unique id). The Doctors page will
-      // merge this with the seeded list.
-      const bmdc = String(data?.doctor?.bmdc || "").trim();
+      // Auto-register the doctor in our directory and aggregate AI legibility against the same
+      // id. Prefer BMDC as the unique id; if the prescription doesn't show one, derive a stable
+      // id from name + hospital so the same doctor across scans dedups (and the legibility
+      // score still has somewhere to land).
+      const bmdcRaw = String(data?.doctor?.bmdc || "").trim();
       const name = String(data?.doctor?.name || "").trim();
-      if (bmdc && name) {
+      const hospital = String(data?.doctor?.hospital || "").trim();
+      if (name) {
+        const idLike = bmdcRaw
+          ? bmdcRaw
+          : `nb_${name.toLowerCase().replace(/[^a-z0-9ঀ-৿]+/gi, "-").slice(0, 40)}${hospital ? "_" + hospital.toLowerCase().replace(/[^a-z0-9ঀ-৿]+/gi, "-").slice(0, 20) : ""}`;
         upsertExternalDoctor({
-          bmdc,
+          bmdc: idLike,
           name,
-          hospital: data?.doctor?.hospital || undefined,
+          hospital: hospital || undefined,
           specialty: data?.doctor?.specialization || undefined,
         });
+        if (typeof data?.legibility_score === "number") {
+          addLegibilityScore(
+            idLike,
+            Number(data.legibility_score),
+            name,
+            data.legibility_reason || undefined
+          );
+        }
       }
 
       // Match recommended tests against the free / low-cost provider DB.

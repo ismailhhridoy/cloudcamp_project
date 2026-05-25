@@ -5,6 +5,7 @@
 //   • doctors/{bmdc}                — public read; signed-in users can write (auto-register
 //                                     from prescription scans). BMDC is the doc id.
 //   • legibilityScores/{bmdc}       — public read; signed-in write.
+//   • patientRatings/{bmdc}         — public read; signed-in write (aggregated review score).
 //   • doctorAccounts/{id}           — public read; signed-in write.
 //   • auditSamples/{id}             — public read; signed-in write (MBBS auditor scoring).
 //   • certifications/{id}           — public read; signed-in write (auditor signs cert).
@@ -49,6 +50,10 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     match /legibilityScores/{bmdc} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /patientRatings/{bmdc} {
       allow read: if true;
       allow write: if isSignedIn();
     }

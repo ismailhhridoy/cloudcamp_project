@@ -240,6 +240,17 @@ export interface LegibilityRecord {
   lastUpdated: string;
 }
 
+// Per-doctor aggregated patient rating ("how easy was it to read this doctor's prescription").
+// Keyed by the same id as the doctor (real BMDC, or synthetic `nb_...` when none).
+export interface PatientRatingRecord {
+  bmdc: string;
+  doctorName?: string;
+  scoreSum: number;
+  scoreCount: number;
+  avgScore: number;
+  lastUpdated: string;
+}
+
 // A signed periodic certification. One per doctor per month.
 export interface Certification {
   id: string;

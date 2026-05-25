@@ -10,7 +10,9 @@ export function getSeedData() {
     doctorAccounts: SEED_DOCTOR_ACCOUNTS,
     auditSamples: SEED_AUDIT_SAMPLES,
     certifications: SEED_CERTIFICATIONS,
-    publicDoctors: SEED_PUBLIC_DOCTORS,
+    // Public doctors directory is no longer seeded — the Doctors page now shows only doctors
+    // auto-discovered from real prescription scans.
+    publicDoctors: [] as ExternalDoctor[],
   };
 }
 
@@ -31,26 +33,6 @@ const SEED_DOCTOR_ACCOUNTS: DoctorProfile[] = [
     appliedAt: new Date().toISOString(),
     approvedAt: new Date().toISOString(),
   },
-];
-
-// ── Doctors seeded into the public registry (visible on Doctors page) ──────
-// These mirror the hardcoded list that used to live in pages/Doctors.tsx, recast as
-// ExternalDoctor records keyed by BMDC so they merge with auto-registered ones.
-const SEED_PUBLIC_DOCTORS: ExternalDoctor[] = [
-  { bmdc: "A-54321", name: "Dr. Anisur Rahman",  hospital: "Dhaka Medical College Hospital",   specialty: "General Medicine",        district: "Dhaka",      scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-98765", name: "Dr. Fatema Begum",   hospital: "Apollo Hospitals Dhaka",            specialty: "Gynecology & Obstetrics", district: "Dhaka",      scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-12345", name: "Dr. Kamal Hossain",  hospital: "Rajshahi Medical College",          specialty: "Pediatrics",              district: "Rajshahi",   scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-67890", name: "Dr. Selina Akhter",  hospital: "Chittagong Medical College",        specialty: "Internal Medicine",       district: "Chittagong", scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-23456", name: "Dr. Jahangir Alam",  hospital: "Sylhet MAG Osmani Medical",         specialty: "Cardiology",              district: "Sylhet",     scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-34567", name: "Dr. Nasrin Sultana", hospital: "Khulna Medical College",            specialty: "Dermatology",             district: "Khulna",     scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-44521", name: "Dr. Mahbub Hasan",   hospital: "Barisal Sher-e-Bangla Medical College", specialty: "Pediatrics",         district: "Barisal",    scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-58219", name: "Dr. Roksana Khanam", hospital: "Mymensingh Medical College",        specialty: "Gynecology & Obstetrics", district: "Mymensingh", scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-61932", name: "Dr. Tariq Aziz",     hospital: "Rangpur Medical College",           specialty: "Internal Medicine",       district: "Rangpur",    scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-70214", name: "Dr. Sumi Akter",     hospital: "Cumilla Medical College",           specialty: "Dermatology",             district: "Cumilla",    scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-78435", name: "Dr. Imran Hossain",  hospital: "Jashore Medical College",           specialty: "General Medicine",        district: "Jashore",    scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-82155", name: "Dr. Nahid Rezwana",  hospital: "Dinajpur Medical College",          specialty: "Cardiology",              district: "Dinajpur",   scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-65318", name: "Dr. Faruque Hossain",hospital: "Faridpur Medical College",          specialty: "Pediatrics",              district: "Faridpur",   scanCount: 0, scannedAt: new Date().toISOString() },
-  { bmdc: "A-91402", name: "Dr. Sabina Yasmin",  hospital: "Noakhali Medical College",          specialty: "Gynecology & Obstetrics", district: "Noakhali",   scanCount: 0, scannedAt: new Date().toISOString() },
 ];
 
 // ── Audit samples and example certification ───────────────────────────────
