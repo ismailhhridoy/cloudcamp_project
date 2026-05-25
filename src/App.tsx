@@ -14,7 +14,10 @@ import { DashboardPage } from "./pages/Dashboard.tsx";
 import { CompliancePage } from "./pages/Compliance.tsx";
 import { DoctorPortal } from "./pages/DoctorPortal.tsx";
 import { SettingsPage } from "./pages/Settings.tsx";
-import { auth, signInWithGoogle } from "./lib/firebase";
+import { PatientProfilePage } from "./pages/PatientProfile.tsx";
+import { AuthModal } from "./components/AuthModal.tsx";
+import { useCurrentUser } from "./lib/store.ts";
+import { auth } from "./lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { LogIn, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -22,6 +25,11 @@ import { useLanguage } from "./lib/LanguageContext.tsx";
 import { getConsent } from "./lib/consent.ts";
 import { autoLoadIfCached } from "./lib/llm.ts";
 import { autoLoadTfIfOptedIn } from "./lib/transformersEngine.ts";
+import { hasPatientProfile } from "./lib/profile.ts";
+import { PatientProfileSheet } from "./components/PatientProfileSheet.tsx";
+import { firebaseConfigStatus } from "./lib/firebase.ts";
+import { initDbSync, seedOnceIfNeeded } from "./lib/db.ts";
+import { AlertTriangle } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
@@ -29,6 +37,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [hasConsent, setHasConsent] = useState<boolean>(() => !!getConsent());
+  const [showProfileGate, setShowProfileGate] = useState<boolean>(false);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+  const account = useCurrentUser();
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -41,12 +52,29 @@ export default function App() {
     // they're ready by the time the patient opens Triage — no extra click after a reload.
     autoLoadIfCached();
     autoLoadTfIfOptedIn();
-    return () => unsubscribe();
+
+    // Bootstrap Firestore sync (no-op if config is still MOCK).
+    const stopDbSync = initDbSync();
+
+    // One-time seed of demo content into Firestore. Picks up the existing seeded constants from
+    // the Doctors / DoctorPortal pages and pushes them as real documents.
+    if (firebaseConfigStatus === "ok") {
+      import("./lib/seedFirestore.ts")
+        .then((m) => seedOnceIfNeeded(m.getSeedData()))
+        .then((r) => { if (r.seeded) console.log("[firestore] one-time seed complete"); })
+        .catch((e) => console.warn("[firestore] seed error", e));
+    }
+
+    return () => {
+      unsubscribe();
+      stopDbSync();
+    };
   }, []);
 
   const triggerLogin = () => {
-    if (!user) {
-      setShowLoginModal(true);
+    if (!account) {
+      // Local auth (signup/signin) — Firebase config is a mock placeholder.
+      setShowAuthModal(true);
     }
   };
 
@@ -79,6 +107,13 @@ export default function App() {
         return <DoctorPortal />;
       case "settings":
         return <SettingsPage />;
+      case "patient-profile":
+        return (
+          <PatientProfilePage
+            onSignIn={() => setShowAuthModal(true)}
+            onEditProfile={() => setShowProfileGate(true)}
+          />
+        );
       default:
         return <HomePage onNavigate={setActiveTab} />;
     }
@@ -86,6 +121,17 @@ export default function App() {
 
   return (
     <>
+      {/* Firebase config sanity banner — non-blocking. Shown when config still has 'MOCK' values. */}
+      {firebaseConfigStatus !== "ok" && (
+        <div className="fixed top-0 inset-x-0 z-[200] bg-amber-500 text-white px-4 py-2 flex items-center gap-2 text-xs shadow-lg">
+          <AlertTriangle size={14} />
+          <span className="font-bold">
+            {firebaseConfigStatus === "mock"
+              ? "Firebase is not configured — sign-up / sign-in and cloud sync are disabled. Edit firebase-applet-config.json."
+              : "Firebase failed to initialise — check the browser console for details."}
+          </span>
+        </div>
+      )}
       <AppShell activeTab={activeTab} setActiveTab={setActiveTab} user={user} onLoginClick={triggerLogin}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -101,10 +147,15 @@ export default function App() {
         </AnimatePresence>
       </AppShell>
 
-      {/* Consent gate — first run only */}
+      {/* Consent gate — first run only.
+          On accept, if the user has no profile yet, immediately show the profile sheet so the
+          diagnostic engine + health tips get the data they need to be personalised. */}
       {!hasConsent && (
         <ConsentGate
-          onAccept={() => setHasConsent(true)}
+          onAccept={() => {
+            setHasConsent(true);
+            if (!hasPatientProfile()) setShowProfileGate(true);
+          }}
           onReviewCompliance={() => {
             setHasConsent(true);
             setActiveTab("compliance");
@@ -112,52 +163,23 @@ export default function App() {
         />
       )}
 
-      {/* Login Modal */}
+      {/* Patient profile sheet — appears right after Consent on first launch. */}
       <AnimatePresence>
-        {showLoginModal && (
-          <div className="fixed inset-0 z-[100] flex items-end lg:items-center justify-center bg-black/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ y: "100%", opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: "100%", opacity: 0 }}
-              className="w-full max-w-md bg-white rounded-t-3xl lg:rounded-3xl p-8 relative shadow-2xl"
-            >
-              <button
-                onClick={() => setShowLoginModal(false)}
-                className="absolute top-6 right-6 text-gray-400"
-              >
-                <X size={24} />
-              </button>
-
-              <div className="flex flex-col items-center text-center space-y-6">
-                <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center text-emerald-600">
-                  <LogIn size={40} />
-                </div>
-
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-gray-900">{t("auth.prompt.title")}</h2>
-                  <p className="text-gray-500 text-sm leading-relaxed">{t("auth.prompt.desc")}</p>
-                </div>
-
-                <button
-                  onClick={signInWithGoogle}
-                  className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 shadow-xl hover:bg-emerald-500 transition-colors"
-                >
-                  <LogIn size={20} />
-                  {t("auth.btn.google")}
-                </button>
-
-                <button
-                  onClick={() => setShowLoginModal(false)}
-                  className="text-gray-400 text-sm font-medium"
-                >
-                  {t("auth.btn.skip")}
-                </button>
-              </div>
-            </motion.div>
-          </div>
+        {hasConsent && showProfileGate && (
+          <PatientProfileSheet onClose={() => setShowProfileGate(false)} />
         )}
       </AnimatePresence>
+
+      {/* Auth (sign in / sign up) modal */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <AuthModal
+            onClose={() => setShowAuthModal(false)}
+            onSuccess={() => setActiveTab("patient-profile")}
+          />
+        )}
+      </AnimatePresence>
+
     </>
   );
 }

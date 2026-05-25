@@ -1,9 +1,9 @@
 {
-  "apiKey": "MOCK",
-  "authDomain": "MOCK",
-  "projectId": "MOCK",
-  "storageBucket": "MOCK",
-  "messagingSenderId": "MOCK",
-  "appId": "MOCK",
+  "apiKey": "AIzaSyDP8JsDjDkzAQCGkrFSFlg6lFalfTAyBFg",
+  "authDomain": "shasthyoai.firebaseapp.com",
+  "projectId": "shasthyoai",
+  "storageBucket": "shasthyoai.firebasestorage.app",
+  "messagingSenderId": "349816678634",
+  "appId": "1:349816678634:web:f1085a66f94e6e930a8f93",
   "firestoreDatabaseId": "(default)"
 }

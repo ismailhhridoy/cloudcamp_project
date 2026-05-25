@@ -1,35 +1,77 @@
+// Firestore security rules for ShasthyoAI.
+//
+// Model:
+//   • users/{uid}/...               — only the signed-in user can read/write their own subtree.
+//   • doctors/{bmdc}                — public read; signed-in users can write (auto-register
+//                                     from prescription scans). BMDC is the doc id.
+//   • legibilityScores/{bmdc}       — public read; signed-in write.
+//   • doctorAccounts/{id}           — public read; signed-in write.
+//   • auditSamples/{id}             — public read; signed-in write (MBBS auditor scoring).
+//   • certifications/{id}           — public read; signed-in write (auditor signs cert).
+//   • appState/seeded               — public read; signed-in write (one-time seed marker).
+//   • everything else               — denied by default.
+//
+// Production hardening (out of scope for hackathon):
+//   - Lock writes for doctorAccounts/auditSamples/certifications to a custom-claim role.
+//   - Validate document shape (sizeof fields, allowed values) on each write.
+//   - Rate-limit writes via App Check.
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
-    }
 
     function isSignedIn() {
       return request.auth != null;
     }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
 
-    match /patients/{userId} {
-      allow read, write: if isOwner(userId);
+    // Per-user subtree
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /patientProfile/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /prescriptions/{rxId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /reviews/{revId} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
-    match /prescriptions/{id} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-    }
-
+    // Public registry
     match /doctors/{bmdc} {
       allow read: if true;
-      allow write: if false; // Only system or admin
+      allow write: if isSignedIn();
+    }
+    match /legibilityScores/{bmdc} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /doctorAccounts/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /auditSamples/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /certifications/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /appState/{id} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
-    match /symptom_logs/{id} {
-      allow read: if true; // Public for heatmap
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

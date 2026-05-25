@@ -1,15 +1,14 @@
 import { Globe, LogIn, LogOut } from "lucide-react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
-import { auth } from "../lib/firebase.ts";
-import { signOut } from "firebase/auth";
+import { useCurrentUser, signOut as signOutLocal } from "../lib/store.ts";
 
 interface TopBarProps {
-  user: any;
   onLoginClick: () => void;
 }
 
-export function TopBar({ user, onLoginClick }: TopBarProps) {
+export function TopBar({ onLoginClick }: TopBarProps) {
   const { lang, setLang } = useLanguage();
+  const account = useCurrentUser();
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-sm">
@@ -40,14 +39,14 @@ export function TopBar({ user, onLoginClick }: TopBarProps) {
             : "AI-powered rural health companion — with licensed-doctor verification"}
         </p>
         <div className="flex items-center gap-3">
-          {user ? (
+          {account ? (
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-700 text-xs font-bold">
-                {user.displayName?.charAt(0) || user.email?.charAt(0) || "U"}
+                {account.name.charAt(0).toUpperCase()}
               </div>
-              <span className="text-sm font-medium text-gray-700">{user.displayName || user.email}</span>
+              <span className="text-sm font-medium text-gray-700">{account.name}</span>
               <button
-                onClick={() => signOut(auth)}
+                onClick={() => signOutLocal()}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100"
               >
                 <LogOut size={14} /> {lang === "bn" ? "সাইন আউট" : "Sign out"}

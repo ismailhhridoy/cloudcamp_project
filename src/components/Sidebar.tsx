@@ -1,24 +1,24 @@
-import { Home, MessageSquare, Camera, Users, BarChart3, ShieldCheck, LogIn, LogOut, Globe, Stethoscope, Settings as SettingsIcon } from "lucide-react";
+import { Home, MessageSquare, Camera, Users, BarChart3, ShieldCheck, LogIn, LogOut, Globe, Stethoscope, Settings as SettingsIcon, UserRound } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
-import { auth } from "../lib/firebase.ts";
-import { signOut } from "firebase/auth";
+import { useCurrentUser, signOut as signOutLocal } from "../lib/store.ts";
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  user: any;
   onLoginClick: () => void;
 }
 
-export function Sidebar({ activeTab, setActiveTab, user, onLoginClick }: SidebarProps) {
+export function Sidebar({ activeTab, setActiveTab, onLoginClick }: SidebarProps) {
   const { t, lang, setLang } = useLanguage();
+  const account = useCurrentUser();
 
   const tabs = [
     { id: "home", icon: Home, label: t("app.nav.home") },
     { id: "triage", icon: MessageSquare, label: t("app.nav.triage") },
     { id: "scan", icon: Camera, label: t("app.nav.scan") },
     { id: "doctors", icon: Users, label: t("app.nav.doctors") },
+    { id: "patient-profile", icon: UserRound, label: t("app.nav.profile") },
     { id: "dashboard", icon: BarChart3, label: t("app.nav.dashboard") },
     { id: "compliance", icon: ShieldCheck, label: t("app.nav.compliance") },
     { id: "doctor-portal", icon: Stethoscope, label: t("app.nav.doctor_portal") },
@@ -68,14 +68,23 @@ export function Sidebar({ activeTab, setActiveTab, user, onLoginClick }: Sidebar
           <Globe size={16} />
           {lang === "en" ? "বাংলা" : "English"}
         </button>
-        {user ? (
-          <button
-            onClick={() => signOut(auth)}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-100/80 hover:bg-red-500/20 hover:text-red-300 transition-colors"
-          >
-            <LogOut size={16} />
-            {lang === "bn" ? "সাইন আউট" : "Sign out"}
-          </button>
+        {account ? (
+          <>
+            <button
+              onClick={() => setActiveTab("patient-profile")}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-900/40 text-white hover:bg-emerald-900/60 transition-colors"
+            >
+              <UserRound size={16} />
+              <span className="truncate">{account.name}</span>
+            </button>
+            <button
+              onClick={() => signOutLocal()}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-100/80 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+            >
+              <LogOut size={16} />
+              {lang === "bn" ? "সাইন আউট" : "Sign out"}
+            </button>
+          </>
         ) : (
           <button
             onClick={onLoginClick}

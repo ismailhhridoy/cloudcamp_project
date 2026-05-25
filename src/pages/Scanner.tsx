@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Camera, CheckCircle2, AlertCircle, Loader2, PlayCircle, Pill, ShieldCheck, ShieldAlert, Clock, Bell, ChevronDown, ChevronUp, FileText, Volume2, Square, Apple, Stethoscope, FlaskConical } from "lucide-react";
+import { Camera, CheckCircle2, AlertCircle, Loader2, PlayCircle, Pill, ShieldCheck, ShieldAlert, Clock, Bell, ChevronDown, ChevronUp, FileText, Volume2, Square, Apple, Stethoscope, FlaskConical, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
@@ -11,9 +11,16 @@ import {
   getLegibilityForDoctor,
   useStore,
   KEYS,
+  useCurrentUser,
+  saveScannedPrescription,
+  saveSubmittedReview,
+  upsertExternalDoctor,
+  listExternalDoctors,
 } from "../lib/store.ts";
 import type { ExtractedPrescription, ExtractedMedicine, LegibilityRecord } from "../lib/types.ts";
 import { speak, stop as ttsStop, isTtsSupported, warmupVoices } from "../lib/tts.ts";
+import { matchTests, type MatchedTest } from "../lib/freeTests.ts";
+import { usePatientProfile } from "../lib/profile.ts";
 
 // Hard-coded "known doctors" list mirror — used purely for the BMDC verification check on
 // scans. Kept in sync with the Doctors page seed; in production this would query a verified
@@ -30,16 +37,22 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
   const [reminderSet, setReminderSet] = useState<Set<number>>(new Set());
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  // Default Bangla per spec — most patients are rural BD; user can flip to EN.
+  const [speechLang, setSpeechLang] = useState<"en" | "bn">("bn");
   const legibilityRecords = useStore<LegibilityRecord[]>(KEYS.LEGIBILITY_KEY, []);
+  const account = useCurrentUser();
+  const profile = usePatientProfile();
+  const [freeTestMatches, setFreeTestMatches] = useState<MatchedTest[]>([]);
 
   useEffect(() => { warmupVoices(); }, []);
 
-  // BMDC verification: cross-reference against seeded + onboarded doctor pool.
+  // BMDC verification: cross-reference against seeded + onboarded + auto-registered (external) pool.
   const verifiedBmdcs = useMemo(() => {
     const set = new Set<string>(SEEDED_BMDCS);
     for (const d of listDoctors()) {
       if (d.bmdcNumber && d.approvalStatus === "approved") set.add(d.bmdcNumber);
     }
+    for (const d of listExternalDoctors()) set.add(d.bmdc);
     return set;
   }, [result]);
 
@@ -83,6 +96,45 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
           data.legibility_reason || undefined
         );
       }
+
+      // Auto-register the doctor in our directory (BMDC = unique id). The Doctors page will
+      // merge this with the seeded list.
+      const bmdc = String(data?.doctor?.bmdc || "").trim();
+      const name = String(data?.doctor?.name || "").trim();
+      if (bmdc && name) {
+        upsertExternalDoctor({
+          bmdc,
+          name,
+          hospital: data?.doctor?.hospital || undefined,
+          specialty: data?.doctor?.specialization || undefined,
+        });
+      }
+
+      // Match recommended tests against the free / low-cost provider DB.
+      const tests = Array.isArray(data.tests) ? data.tests : [];
+      if (tests.length > 0) {
+        matchTests(tests, profile.district).then(setFreeTestMatches).catch(() => setFreeTestMatches([]));
+      } else {
+        setFreeTestMatches([]);
+      }
+
+      // Save to the signed-in patient's history.
+      if (account) {
+        saveScannedPrescription({
+          userId: account.id,
+          doctor: {
+            name: data?.doctor?.name,
+            bmdc: data?.doctor?.bmdc,
+            hospital: data?.doctor?.hospital,
+            specialization: data?.doctor?.specialization,
+          },
+          medicineCount: Array.isArray(data.medicines) ? data.medicines.length : 0,
+          testCount: Array.isArray(data.tests) ? data.tests.length : 0,
+          diagnosisHint: data.diagnosis_hint || undefined,
+          followUp: data.follow_up || undefined,
+          legibilityScore: typeof data.legibility_score === "number" ? data.legibility_score : undefined,
+        });
+      }
     } catch (err: any) {
       setError(err.message || "Failed to analyze. Please try with a clearer image.");
     } finally {
@@ -96,38 +148,42 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
     // In production: save to Firestore with notification schedule
   };
 
-  // Build a flat readable text version of the prescription for TTS.
+  // Build a flat readable script for TTS — medicines and tests only per spec. Doctor name,
+  // complaint, diagnosis, and follow-up are kept on screen but not read aloud.
   const buildSpeechText = (lng: "en" | "bn"): string => {
     if (!result) return "";
     const parts: string[] = [];
-    const doc = result.doctor || {};
-    if (doc.name) parts.push(lng === "bn" ? `ডাক্তার ${doc.name}` : `Doctor ${doc.name}`);
-    if (result.chief_complaint) parts.push(lng === "bn" ? `সমস্যা: ${result.chief_complaint}` : `Complaint: ${result.chief_complaint}`);
-    if (result.diagnosis_hint) parts.push(lng === "bn" ? `সম্ভাব্য রোগ: ${result.diagnosis_hint}` : `Likely diagnosis: ${result.diagnosis_hint}`);
-    parts.push(lng === "bn" ? `মোট ${result.medicines.length}টি ওষুধ লেখা আছে।` : `${result.medicines.length} medicines were prescribed.`);
-    result.medicines.forEach((m, i) => {
-      const purpose = lng === "bn" ? (m.purpose_bangla || "") : (m.purpose_english || "");
-      const sched = m.schedule || { morning: 0, noon: 0, night: 0 };
-      const schedText = lng === "bn"
-        ? `সকাল ${sched.morning}, দুপুর ${sched.noon}, রাত ${sched.night}`
-        : `morning ${sched.morning}, noon ${sched.noon}, night ${sched.night}`;
-      const dur = m.duration ? (lng === "bn" ? `, ${m.duration} ধরে` : `, for ${m.duration}`) : "";
-      const food = sched.before_food ? (lng === "bn" ? "খাবারের আগে" : "before food") : sched.after_food ? (lng === "bn" ? "খাবারের পরে" : "after food") : "";
-      const head = lng === "bn" ? `ওষুধ ${i + 1}: ${m.name}${m.strength ? ", " + m.strength : ""}` : `Medicine ${i + 1}: ${m.name}${m.strength ? ", " + m.strength : ""}`;
-      parts.push(`${head}. ${schedText}${dur}. ${food}. ${purpose}`);
-    });
-    if (result.follow_up) parts.push(lng === "bn" ? `ফলো-আপ: ${result.follow_up}` : `Follow-up: ${result.follow_up}`);
-    if (result.patient_notes) parts.push(lng === "bn" ? `অতিরিক্ত নির্দেশনা: ${result.patient_notes}` : `Additional instructions: ${result.patient_notes}`);
-    return parts.join(". ");
+    const meds = result.medicines || [];
+    if (meds.length > 0) {
+      parts.push(lng === "bn" ? `মোট ${meds.length}টি ওষুধ।` : `${meds.length} medicines.`);
+      meds.forEach((m, i) => {
+        const sched = m.schedule || { morning: 0, noon: 0, night: 0 };
+        const schedText = lng === "bn"
+          ? `সকাল ${sched.morning}, দুপুর ${sched.noon}, রাত ${sched.night}`
+          : `morning ${sched.morning}, noon ${sched.noon}, night ${sched.night}`;
+        const dur = m.duration ? (lng === "bn" ? `, ${m.duration} ধরে` : `, for ${m.duration}`) : "";
+        const food = sched.before_food ? (lng === "bn" ? ", খাবারের আগে" : ", before food") : sched.after_food ? (lng === "bn" ? ", খাবারের পরে" : ", after food") : "";
+        const head = lng === "bn"
+          ? `${i + 1} নম্বর ওষুধ ${m.name}${m.strength ? " " + m.strength : ""}`
+          : `Medicine ${i + 1}, ${m.name}${m.strength ? " " + m.strength : ""}`;
+        parts.push(`${head}. ${schedText}${dur}${food}.`);
+      });
+    }
+    const tests = Array.isArray(result.tests) ? result.tests : [];
+    if (tests.length > 0) {
+      parts.push(lng === "bn" ? `${tests.length}টি পরীক্ষা করতে বলা হয়েছে:` : `${tests.length} tests recommended:`);
+      tests.forEach((tst, i) => parts.push(`${i + 1}. ${tst}.`));
+    }
+    return parts.join(" ");
   };
 
   const handleListen = () => {
     if (isSpeaking) { ttsStop(); setIsSpeaking(false); return; }
-    const text = buildSpeechText(lang);
+    const text = buildSpeechText(speechLang);
     if (!text) return;
     setIsSpeaking(true);
     speak(text, {
-      lang: lang === "bn" ? "bn-BD" : "en-US",
+      lang: speechLang === "bn" ? "bn-BD" : "en-US",
       onEnd: () => setIsSpeaking(false),
       onError: () => setIsSpeaking(false),
     });
@@ -219,15 +275,33 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
         {result && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
 
+            {/* Not signed in → this scan is NOT being saved to history. Make that visible. */}
+            {!account && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-start gap-3">
+                <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-amber-900">
+                    {lang === "bn" ? "এই স্ক্যান প্রোফাইলে সংরক্ষিত হয়নি" : "This scan is not saved to your profile"}
+                  </p>
+                  <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                    {lang === "bn"
+                      ? "প্রেসক্রিপশন হিস্ট্রি সংরক্ষণ করতে সাইন ইন করুন। তারপর নতুন স্ক্যানগুলো স্বয়ংক্রিয়ভাবে আপনার প্রোফাইলে যাবে।"
+                      : "Sign in to keep a private history of your scans. New scans will then auto-save to your profile."}
+                  </p>
+                  <button
+                    onClick={onLoginRequired}
+                    className="mt-2 text-xs font-bold text-amber-700 hover:underline"
+                  >
+                    {lang === "bn" ? "এখন সাইন ইন করুন →" : "Sign in now →"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Doctor card with verification + AI legibility */}
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
               <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                 <FileText size={12} /> {t("scan.result.doctor_detected")}
-                {result.provider && (
-                  <span className="ml-auto text-[9px] font-bold text-gray-400 uppercase">
-                    via {result.provider}
-                  </span>
-                )}
               </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -265,42 +339,35 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
                 </div>
               )}
 
-              {/* AI legibility score */}
-              {typeof result.legibility_score === "number" && (
-                <div className="mt-3 bg-gray-50 border border-gray-100 rounded-xl p-3 flex gap-3 items-start">
-                  <div className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm shrink-0",
-                    result.legibility_score >= 4 ? "bg-emerald-100 text-emerald-700" :
-                    result.legibility_score >= 3 ? "bg-amber-100 text-amber-700" :
-                    "bg-red-100 text-red-700"
-                  )}>
-                    {result.legibility_score}/5
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                      {lang === "bn" ? "AI হাতের লেখা মূল্যায়ন" : "AI Handwriting Score"}
-                    </p>
-                    <p className="text-xs text-gray-700 mt-0.5">{result.legibility_reason}</p>
-                    {legibilityForThisDoctor && legibilityForThisDoctor.scoreCount > 1 && (
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        {lang === "bn" ? "এই ডাক্তারের গড়:" : "Average for this doctor:"} <strong>{legibilityForThisDoctor.avgScore}/5</strong> ({legibilityForThisDoctor.scoreCount} {lang === "bn" ? "স্ক্যান" : "scans"})
-                      </p>
+              {/* Listen Prescription button + EN/BN voice toggle */}
+              {isTtsSupported() && result.medicines?.length > 0 && (
+                <div className="mt-3 flex items-stretch gap-2">
+                  <button
+                    onClick={handleListen}
+                    className={cn(
+                      "flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors",
+                      isSpeaking ? "bg-red-50 text-red-700 border border-red-200" : "bg-blue-600 text-white hover:bg-blue-500"
                     )}
+                  >
+                    {isSpeaking
+                      ? <><Square size={14} /> {lang === "bn" ? "থামান" : "Stop"}</>
+                      : <><Volume2 size={14} /> {lang === "bn" ? "প্রেসক্রিপশন শুনুন" : "Listen to Prescription"}</>}
+                  </button>
+                  <div className="flex bg-gray-100 rounded-xl p-1 text-[11px] font-bold shrink-0">
+                    <button
+                      onClick={() => { if (isSpeaking) { ttsStop(); setIsSpeaking(false); } setSpeechLang("bn"); }}
+                      className={cn("px-3 rounded-lg transition-colors", speechLang === "bn" ? "bg-white shadow-sm text-blue-700" : "text-gray-500")}
+                    >
+                      বাংলা
+                    </button>
+                    <button
+                      onClick={() => { if (isSpeaking) { ttsStop(); setIsSpeaking(false); } setSpeechLang("en"); }}
+                      className={cn("px-3 rounded-lg transition-colors", speechLang === "en" ? "bg-white shadow-sm text-blue-700" : "text-gray-500")}
+                    >
+                      EN
+                    </button>
                   </div>
                 </div>
-              )}
-
-              {/* Listen Prescription button */}
-              {isTtsSupported() && result.medicines?.length > 0 && (
-                <button
-                  onClick={handleListen}
-                  className={cn(
-                    "mt-3 w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors",
-                    isSpeaking ? "bg-red-50 text-red-700 border border-red-200" : "bg-blue-600 text-white hover:bg-blue-500"
-                  )}
-                >
-                  {isSpeaking ? <><Square size={14} /> {lang === "bn" ? "থামান" : "Stop"}</> : <><Volume2 size={14} /> {lang === "bn" ? "প্রেসক্রিপশন শুনুন" : "Listen to Prescription"}</>}
-                </button>
               )}
 
               {result.follow_up && (
@@ -325,58 +392,65 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
                 {t("scan.result.meds_title")} ({result.medicines?.length || 0})
               </p>
-              {(result.medicines || []).map((med: ExtractedMedicine, i: number) => (
-                <motion.div key={i} layout className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                  <button onClick={() => setExpandedMed(expandedMed === i ? null : i)} className="w-full flex items-start gap-3 p-4 text-left">
-                    <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
-                      <Pill size={20} className="text-emerald-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-bold text-gray-900">{med.name}</p>
-                        {med.strength && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{med.strength}</span>}
-                        {med.form && <span className="text-[10px] font-medium text-gray-500 lowercase">· {med.form}</span>}
+              {(() => {
+                const meds = result.medicines || [];
+                // Long list → compact rows by default, expanded grid only on tap.
+                const useCompact = meds.length > 3;
+                return meds.map((med: ExtractedMedicine, i: number) => (
+                  <motion.div key={i} layout className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                    <button onClick={() => setExpandedMed(expandedMed === i ? null : i)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
+                      <div className={cn("bg-emerald-50 rounded-lg flex items-center justify-center shrink-0", useCompact ? "w-8 h-8" : "w-10 h-10")}>
+                        <Pill size={useCompact ? 14 : 18} className="text-emerald-600" />
                       </div>
-                      {med.generic && <p className="text-[11px] text-gray-400 italic">{med.generic}</p>}
-                      {med.duration && (
-                        <p className="text-[11px] text-gray-500 mt-0.5">
-                          <Clock size={10} className="inline -mt-0.5" /> {med.duration}
-                        </p>
-                      )}
-                      <p className="text-xs font-medium text-emerald-700 mt-1">
-                        {lang === "bn" ? (med.purpose_bangla || med.purpose_english) : (med.purpose_english || med.purpose_bangla)}
-                      </p>
-                    </div>
-                    {expandedMed === i ? <ChevronUp size={16} className="text-gray-400 shrink-0" /> : <ChevronDown size={16} className="text-gray-400 shrink-0" />}
-                  </button>
-
-                  {/* Always-visible dose grid */}
-                  <div className="px-4 pb-3">
-                    <DoseGrid schedule={med.schedule || { morning: 0, noon: 0, night: 0 }} lang={lang as "en" | "bn"} />
-                  </div>
-
-                  <AnimatePresence>
-                    {expandedMed === i && (
-                      <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
-                        <div className="px-4 pb-4 space-y-3 border-t border-gray-50 pt-3">
-                          {med.warnings && (
-                            <div className="bg-orange-50 rounded-xl p-3 flex gap-2">
-                              <AlertCircle size={14} className="text-orange-500 shrink-0 mt-0.5" />
-                              <p className="text-xs text-orange-800">{med.warnings}</p>
-                            </div>
-                          )}
-                          <button onClick={() => handleSetReminder(i, med.name)}
-                            disabled={reminderSet.has(i)}
-                            className={cn("w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all",
-                              reminderSet.has(i) ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : "bg-gray-900 text-white active:scale-95")}>
-                            {reminderSet.has(i) ? <><CheckCircle2 size={14} /> {lang === "bn" ? "রিমাইন্ডার সেট হয়েছে" : "Reminder Set!"}</> : <><Bell size={14} /> {lang === "bn" ? "রিমাইন্ডার সেট করুন" : "Set Reminder"}</>}
-                          </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <p className={cn("font-bold text-gray-900 truncate", useCompact ? "text-sm" : "text-base")}>{med.name}</p>
+                          {med.strength && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{med.strength}</span>}
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              ))}
+                        {!useCompact && med.duration && (
+                          <p className="text-[11px] text-gray-500">
+                            <Clock size={10} className="inline -mt-0.5" /> {med.duration}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                          <DoseGrid schedule={med.schedule || { morning: 0, noon: 0, night: 0 }} lang={lang as "en" | "bn"} compact />
+                          {useCompact && med.duration && (
+                            <span className="text-[10px] text-gray-500 font-medium">· {med.duration}</span>
+                          )}
+                        </div>
+                      </div>
+                      {expandedMed === i ? <ChevronUp size={14} className="text-gray-400 shrink-0" /> : <ChevronDown size={14} className="text-gray-400 shrink-0" />}
+                    </button>
+
+                    <AnimatePresence>
+                      {expandedMed === i && (
+                        <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
+                          <div className="px-3 pb-3 space-y-2.5 border-t border-gray-50 pt-2.5">
+                            <DoseGrid schedule={med.schedule || { morning: 0, noon: 0, night: 0 }} lang={lang as "en" | "bn"} />
+                            {(med.purpose_english || med.purpose_bangla) && (
+                              <p className="text-xs text-emerald-700 leading-relaxed bg-emerald-50 border border-emerald-100 rounded-lg p-2">
+                                {lang === "bn" ? (med.purpose_bangla || med.purpose_english) : (med.purpose_english || med.purpose_bangla)}
+                              </p>
+                            )}
+                            {med.warnings && (
+                              <div className="bg-orange-50 rounded-lg p-2 flex gap-2">
+                                <AlertCircle size={14} className="text-orange-500 shrink-0 mt-0.5" />
+                                <p className="text-xs text-orange-800">{med.warnings}</p>
+                              </div>
+                            )}
+                            <button onClick={() => handleSetReminder(i, med.name)}
+                              disabled={reminderSet.has(i)}
+                              className={cn("w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all",
+                                reminderSet.has(i) ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : "bg-gray-900 text-white active:scale-95")}>
+                              {reminderSet.has(i) ? <><CheckCircle2 size={14} /> {lang === "bn" ? "রিমাইন্ডার সেট হয়েছে" : "Reminder Set!"}</> : <><Bell size={14} /> {lang === "bn" ? "রিমাইন্ডার সেট করুন" : "Set Reminder"}</>}
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                ));
+              })()}
             </div>
 
             {/* Tests */}
@@ -392,6 +466,43 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Free / low-cost test locations matched to the recommended tests */}
+            {freeTestMatches.length > 0 && (
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 shadow-sm">
+                <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <MapPin size={12} /> {lang === "bn" ? "বিনামূল্যে / কম খরচে পরীক্ষা" : "Free / low-cost test locations"}
+                </p>
+                <div className="space-y-3">
+                  {freeTestMatches.map((m, i) => (
+                    <div key={i} className="bg-white border border-blue-100 rounded-xl p-3">
+                      <p className="text-xs font-bold text-blue-800 mb-1.5">{m.test}</p>
+                      <div className="space-y-1.5">
+                        {m.providers.slice(0, 3).map((p) => (
+                          <div key={p.id} className="text-[12px] text-gray-700">
+                            <p className="font-bold text-gray-900">{lang === "bn" ? p.name_bn : p.name_en}</p>
+                            <p className="text-[11px] text-gray-500 leading-snug">{lang === "bn" ? p.note_bn : p.note_en}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1"><Clock size={10} />{lang === "bn" ? p.hours_bn : p.hours_en}</span>
+                              {p.phone && (
+                                <a href={`tel:${p.phone}`} className="inline-flex items-center gap-1 text-blue-700 font-bold">
+                                  ☎ {p.phone}
+                                </a>
+                              )}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-blue-700/60 mt-3 italic leading-relaxed">
+                  {lang === "bn"
+                    ? "যাওয়ার আগে স্থানীয় শাখার সাথে যোগাযোগ করে নিশ্চিত করুন। বিনামূল্যে সেবা সাধারণত সরকারি NID প্রয়োজন।"
+                    : "Call the local branch to confirm availability before travelling. Free services usually require a national ID."}
+                </p>
               </div>
             )}
 
@@ -431,7 +542,7 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
             {result.doctor?.name && (
               <button onClick={() => setShowRatingModal(true)}
                 className="w-full py-3 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-bold flex items-center justify-center gap-2 bg-emerald-50 active:scale-95 transition-all">
-                ⭐ {lang === "bn" ? "ডাক্তারকে রেটিং দিন" : "Rate This Doctor"}
+                ⭐ {lang === "bn" ? "প্রেসক্রিপশন রেটিং দিন" : "Rate the Prescription"}
               </button>
             )}
           </motion.div>
@@ -444,7 +555,6 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
           <DoctorRatingModal
             doctor={result.doctor}
             lang={lang}
-            user={user}
             onLoginRequired={onLoginRequired}
             onClose={() => setShowRatingModal(false)}
           />
@@ -454,28 +564,39 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
   );
 }
 
-function DoctorRatingModal({ doctor, lang, user, onLoginRequired, onClose }: any) {
-  const [ratings, setRatings] = useState({ explained: 0, respectful: 0, legible: 0, tests: 0 });
+function DoctorRatingModal({ doctor, lang, onLoginRequired, onClose }: any) {
+  // Single-question rating: how easy was the prescription to read?
+  const [legibleScore, setLegibleScore] = useState(0);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  const questions = [
-    { key: "explained", en: "Explained diagnosis clearly", bn: "রোগ স্পষ্টভাবে বুঝিয়ে বলেছেন" },
-    { key: "respectful", en: "Was respectful and listened", bn: "সম্মানজনক এবং মনোযোগী ছিলেন" },
-    { key: "legible", en: "Prescription was easy to read", bn: "প্রেসক্রিপশন পড়তে সহজ ছিল" },
-    { key: "tests", en: "Recommended appropriate care", bn: "সঠিক চিকিৎসার পরামর্শ দিয়েছেন" },
-  ];
+  // Read the locally-mapped account (id = Firebase uid). Avoid the Firebase User prop whose
+  // `.id` is `undefined` — that was breaking review persistence.
+  const account = useCurrentUser();
 
   const handleSubmit = async () => {
-    if (!user) { onLoginRequired(); return; }
-    if (Object.values(ratings).some(v => v === 0)) return;
+    if (!account) { onLoginRequired(); return; }
+    if (legibleScore === 0) return;
     setSubmitting(true);
     try {
-      await fetch("/api/rate-doctor", {
+      // Best-effort log to the server endpoint.
+      fetch("/api/rate-doctor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bmdc: doctor.bmdc, doctorName: doctor.name, ratings, comment }),
+        body: JSON.stringify({
+          bmdc: doctor.bmdc,
+          doctorName: doctor.name,
+          ratings: { legible: legibleScore },
+          comment,
+        }),
+      }).catch(() => { /* ignore — local + Firestore persistence below is the source of truth */ });
+      // Persist to the signed-in user's review history so it shows up on Profile + Firestore.
+      saveSubmittedReview({
+        userId: account.id,
+        bmdc: doctor.bmdc,
+        doctorName: doctor.name,
+        legibleScore,
+        comment: comment || undefined,
       });
       setSubmitted(true);
     } catch { setSubmitted(true); }
@@ -499,33 +620,38 @@ function DoctorRatingModal({ doctor, lang, user, onLoginRequired, onClose }: any
           <>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-gray-900">{lang === "bn" ? "ডাক্তারকে রেটিং দিন" : "Rate Your Doctor"}</h3>
+                <h3 className="font-bold text-gray-900">{lang === "bn" ? "প্রেসক্রিপশন রেটিং" : "Prescription Rating"}</h3>
                 <p className="text-xs text-gray-400">{doctor.name} · {lang === "bn" ? "সম্পূর্ণ익명" : "Completely anonymous"}</p>
               </div>
               <button onClick={onClose} className="text-gray-400 text-xl font-bold">✕</button>
             </div>
             <div className="space-y-4">
-              {questions.map(q => (
-                <div key={q.key}>
-                  <p className="text-sm font-medium text-gray-700 mb-2">{lang === "bn" ? q.bn : q.en}</p>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <button key={star} onClick={() => setRatings(p => ({ ...p, [q.key]: star }))}
-                        className={cn("w-10 h-10 rounded-xl text-lg transition-all", (ratings as any)[q.key] >= star ? "bg-amber-400 text-white scale-110" : "bg-gray-100 text-gray-300")}>
-                        ★
-                      </button>
-                    ))}
-                  </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  {lang === "bn" ? "প্রেসক্রিপশন পড়া কতটা সহজ ছিল?" : "How easy was it to read the prescription?"}
+                </p>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button key={star} onClick={() => setLegibleScore(star)}
+                      className={cn("flex-1 h-12 rounded-xl text-lg transition-all font-bold",
+                        legibleScore >= star ? "bg-amber-400 text-white" : "bg-gray-100 text-gray-300")}>
+                      ★
+                    </button>
+                  ))}
                 </div>
-              ))}
+                <div className="flex justify-between text-[10px] font-medium text-gray-400 mt-1">
+                  <span>{lang === "bn" ? "একদম পড়া যায়নি" : "Couldn't read at all"}</span>
+                  <span>{lang === "bn" ? "খুব পরিষ্কার" : "Very clear"}</span>
+                </div>
+              </div>
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">{lang === "bn" ? "অতিরিক্ত মন্তব্য (ঐচ্ছিক)" : "Additional comment (optional)"}</p>
-                <textarea value={comment} onChange={e => setComment(e.target.value)} rows={2}
-                  placeholder={lang === "bn" ? "আপনার অভিজ্ঞতা লিখুন..." : "Share your experience..."}
+                <textarea value={comment} onChange={e => setComment(e.target.value)} rows={3}
+                  placeholder={lang === "bn" ? "আপনার অভিজ্ঞতা সংক্ষেপে লিখুন..." : "Briefly share your experience..."}
                   className="w-full bg-gray-50 border border-gray-100 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
               </div>
             </div>
-            <button onClick={handleSubmit} disabled={submitting || Object.values(ratings).some(v => v === 0)}
+            <button onClick={handleSubmit} disabled={submitting || legibleScore === 0}
               className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50">
               {submitting ? <Loader2 size={18} className="animate-spin" /> : null}
               {lang === "bn" ? "বেনামে জমা দিন" : "Submit Anonymously"}

@@ -4,9 +4,24 @@ import type { DoseSchedule } from "../lib/types.ts";
 interface DoseGridProps {
   schedule: DoseSchedule;
   lang: "en" | "bn";
+  compact?: boolean;
 }
 
-export function DoseGrid({ schedule, lang }: DoseGridProps) {
+export function DoseGrid({ schedule, lang, compact }: DoseGridProps) {
+  if (compact) {
+    // Single-line, inline dose like "1+0+1 · after food" — used when there are many medicines.
+    const foodNote = schedule.before_food
+      ? (lang === "bn" ? "খাবারের আগে" : "before food")
+      : schedule.after_food
+      ? (lang === "bn" ? "খাবারের পরে" : "after food")
+      : null;
+    return (
+      <div className="inline-flex items-center gap-2 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-1">
+        <span>{schedule.morning}+{schedule.noon}+{schedule.night}</span>
+        {foodNote && <span className="font-medium text-emerald-700/70 normal-case">· {foodNote}</span>}
+      </div>
+    );
+  }
   const slots = [
     { key: "morning", count: schedule.morning, icon: Sun, label: lang === "bn" ? "সকাল" : "Morning" },
     { key: "noon", count: schedule.noon, icon: Sunset, label: lang === "bn" ? "দুপুর" : "Noon" },

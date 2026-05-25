@@ -96,7 +96,8 @@ export async function chat(
   const ragIds = scored.map((s) => s.entry.id);
 
   if (topScore >= KB_CONFIDENCE_THRESHOLD) {
-    const tree = await answerFromTree(userMessage, lang);
+    const isFirstTurn = history.filter((m) => m.role === "user").length === 0;
+    const tree = await answerFromTree(userMessage, lang, { isFirstTurn });
     opts.onChunk?.(tree.text, tree.text, "kb");
     return {
       text: tree.text,
@@ -159,7 +160,8 @@ export async function chat(
   }
 
   // ── Last resort: best-effort KB answer even at low confidence + apology ─
-  const tree = await answerFromTree(userMessage, lang);
+  const isFirstTurn = history.filter((m) => m.role === "user").length === 0;
+  const tree = await answerFromTree(userMessage, lang, { isFirstTurn });
   opts.onChunk?.(tree.text, tree.text, "rules");
   return {
     text: tree.text,

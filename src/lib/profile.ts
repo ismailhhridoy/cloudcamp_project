@@ -32,10 +32,16 @@ export function setPatientProfile(patch: Partial<PatientProfile>): void {
   };
   window.localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
   for (const fn of listeners) fn();
-  // Storage event for cross-tab sync
   try {
     window.dispatchEvent(new StorageEvent("storage", { key: PROFILE_KEY }));
   } catch {}
+  // Mirror to Firestore against the signed-in user. Lazy import to avoid circular deps.
+  Promise.all([import("./store.ts"), import("./db.ts")])
+    .then(([store, db]) => {
+      const u = store.getCurrentUser();
+      if (u) db.writePatientProfile(u.id, next);
+    })
+    .catch(() => {});
 }
 
 export function hasPatientProfile(): boolean {
