@@ -1,5 +1,6 @@
-import { useMemo } from "react";
-import { UserRound, FileText, Star, LogOut, Trash2, MapPin, ShieldCheck, Calendar } from "lucide-react";
+import { useMemo, useState } from "react";
+import { UserRound, FileText, Star, LogOut, Trash2, ShieldCheck, Calendar, Eye } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import {
   useCurrentUser, signOut, listSavedPrescriptions, listSubmittedReviews,
@@ -7,6 +8,7 @@ import {
 } from "../lib/store.ts";
 import { usePatientProfile, summariseProfile } from "../lib/profile.ts";
 import type { SavedPrescription, SubmittedReview } from "../lib/types.ts";
+import { PrescriptionDetailModal } from "../components/PrescriptionDetailModal.tsx";
 
 interface Props {
   onSignIn: () => void;
@@ -17,6 +19,7 @@ export function PatientProfilePage({ onSignIn, onEditProfile }: Props) {
   const { t, lang } = useLanguage();
   const user = useCurrentUser();
   const profile = usePatientProfile();
+  const [activeRx, setActiveRx] = useState<SavedPrescription | null>(null);
   // useStore subscriptions so the page re-renders on new prescriptions / reviews / sign-out.
   const allRx = useStore<SavedPrescription[]>(KEYS.SAVED_PRESCRIPTIONS_KEY, []);
   const allReviews = useStore<SubmittedReview[]>(KEYS.SUBMITTED_REVIEWS_KEY, []);
@@ -104,31 +107,48 @@ export function PatientProfilePage({ onSignIn, onEditProfile }: Props) {
         ) : (
           <ul className="space-y-2">
             {myRx.map((rx) => (
-              <li key={rx.id} className="border border-gray-100 rounded-2xl p-3 flex gap-3 items-start">
-                <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
-                  <FileText size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-gray-900 truncate">
-                    {rx.doctor.name || (lang === "bn" ? "ডাক্তার শনাক্ত হয়নি" : "Doctor not identified")}
-                  </p>
-                  <p className="text-[11px] text-gray-500 truncate">
-                    {rx.doctor.specialization || ""}
-                    {rx.doctor.bmdc ? ` · BMDC ${rx.doctor.bmdc}` : ""}
-                  </p>
-                  <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-1">
-                    <Calendar size={10} /> {new Date(rx.scannedAt).toLocaleDateString(lang === "bn" ? "bn-BD" : "en-US")}
-                    <span className="opacity-60">·</span>
-                    <span>{rx.medicineCount} {lang === "bn" ? "ওষুধ" : "meds"}</span>
-                    {rx.testCount > 0 && <><span className="opacity-60">·</span><span>{rx.testCount} {lang === "bn" ? "পরীক্ষা" : "tests"}</span></>}
-                  </div>
-                  {rx.diagnosisHint && (
-                    <p className="text-[11px] text-purple-700 mt-1 italic">{rx.diagnosisHint}</p>
+              <li key={rx.id} className="border border-gray-100 rounded-2xl p-3 flex gap-3 items-start hover:border-emerald-200 transition-colors">
+                <button
+                  onClick={() => setActiveRx(rx)}
+                  className="flex gap-3 items-start flex-1 min-w-0 text-left"
+                >
+                  {/* Thumbnail of the uploaded image when available. */}
+                  {rx.imagePreview ? (
+                    <img
+                      src={rx.imagePreview}
+                      alt="prescription"
+                      className="w-14 h-14 rounded-lg object-cover shrink-0 border border-gray-100"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
+                      <FileText size={20} />
+                    </div>
                   )}
-                </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-gray-900 truncate">
+                      {rx.doctor.name || (lang === "bn" ? "ডাক্তার শনাক্ত হয়নি" : "Doctor not identified")}
+                    </p>
+                    <p className="text-[11px] text-gray-500 truncate">
+                      {rx.doctor.specialization || ""}
+                      {rx.doctor.bmdc ? ` · BMDC ${rx.doctor.bmdc}` : ""}
+                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-1 flex-wrap">
+                      <Calendar size={10} /> {new Date(rx.scannedAt).toLocaleDateString(lang === "bn" ? "bn-BD" : "en-US")}
+                      <span className="opacity-60">·</span>
+                      <span>{rx.medicineCount} {lang === "bn" ? "ওষুধ" : "meds"}</span>
+                      {rx.testCount > 0 && <><span className="opacity-60">·</span><span>{rx.testCount} {lang === "bn" ? "পরীক্ষা" : "tests"}</span></>}
+                    </div>
+                    {rx.diagnosisHint && (
+                      <p className="text-[11px] text-purple-700 mt-1 italic line-clamp-1">{rx.diagnosisHint}</p>
+                    )}
+                    <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold text-emerald-700">
+                      <Eye size={10} /> {lang === "bn" ? "বিস্তারিত দেখুন" : "View details"}
+                    </span>
+                  </div>
+                </button>
                 <button
                   onClick={() => { if (confirm(t("profile.rx.confirmDelete"))) deleteSavedPrescription(rx.id); }}
-                  className="text-gray-400 hover:text-red-500 p-1"
+                  className="text-gray-400 hover:text-red-500 p-1 shrink-0"
                   title={t("profile.rx.delete")}
                 >
                   <Trash2 size={14} />
@@ -176,6 +196,12 @@ export function PatientProfilePage({ onSignIn, onEditProfile }: Props) {
         <ShieldCheck size={10} className="inline -mt-0.5 mr-1" />
         {t("profile.dataNotice")}
       </p>
+
+      <AnimatePresence>
+        {activeRx && (
+          <PrescriptionDetailModal record={activeRx} onClose={() => setActiveRx(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

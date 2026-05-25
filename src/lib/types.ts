@@ -50,7 +50,11 @@ export interface SavedPrescription {
   diagnosisHint?: string;
   followUp?: string;
   legibilityScore?: number;
-  imagePreview?: string; // small base64 thumbnail
+  // The original uploaded image, compressed to ~800px JPEG / base64 (data URL).
+  imagePreview?: string;
+  // The full extracted payload so the patient can review every detail later — medicines with
+  // dose grid, tests, nutrition guidelines, etc.
+  extraction?: ExtractedPrescription;
 }
 
 export interface SubmittedReview {
@@ -105,7 +109,8 @@ export interface DoseSchedule {
   night: number;
   before_food?: boolean;
   after_food?: boolean;
-  notes?: string;    // e.g. "with warm water"
+  notes?: string;    // e.g. "with warm water" — English (or whatever language Gemini chose)
+  notes_bn?: string; // same instruction in plain Bangla
 }
 
 export interface ExtractedMedicine {
@@ -115,9 +120,11 @@ export interface ExtractedMedicine {
   form?: string;              // tablet, syrup, capsule, drops, injection
   schedule: DoseSchedule;
   duration?: string;          // e.g. "5 days"
+  duration_bn?: string;       // same duration in Bangla (e.g. "৫ দিন")
   purpose_english?: string;
   purpose_bangla?: string;
   warnings?: string;
+  warnings_bn?: string;
 }
 
 export interface ExtractedDoctor {

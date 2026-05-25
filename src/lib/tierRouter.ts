@@ -69,6 +69,15 @@ export async function chat(
 
   const settings = getLLMSettings();
   const online = typeof navigator !== "undefined" ? navigator.onLine : true;
+  const webllm = getLocalLLMState();
+  const tf = getTfState();
+  const hasLocalLLM = webllm.status === "ready" || tf.status === "ready";
+
+  // Always run RAG so KB snippets are available as grounding for whichever tier answers.
+  const scored = await retrieveWithScore(userMessage, 3);
+  const topScore = scored[0]?.score ?? 0;
+  const ragIds = scored.map((s) => s.entry.id);
+  const ragSnippet = snippetForPrompt(scored.map((s) => s.entry), lang);
 
   // ── Tier 3: Cloud (online, not force-local) ──────────────────────────────
   if (online && !settings.forceLocal) {
@@ -88,14 +97,11 @@ export async function chat(
     }
   }
 
-  // ── KB-first: instant, accurate, bilingual ──────────────────────────────
-  // Run RAG. If top result is confident, return KB answer immediately. Otherwise keep snippets
-  // for the LLM tiers as grounding context.
-  const scored = await retrieveWithScore(userMessage, 3);
-  const topScore = scored[0]?.score ?? 0;
-  const ragIds = scored.map((s) => s.entry.id);
-
-  if (topScore >= KB_CONFIDENCE_THRESHOLD) {
+  // ── Offline preference: if a local LLM is loaded, prefer it over the KB. ──
+  // The user explicitly asked for this: when they're offline the downloaded LLM should answer
+  // free-form, with the KB as grounding (RAG). KB-direct is only used when no local LLM is
+  // available (or as a last-resort low-confidence fallback below).
+  if (!hasLocalLLM && topScore >= KB_CONFIDENCE_THRESHOLD) {
     const isFirstTurn = history.filter((m) => m.role === "user").length === 0;
     const tree = await answerFromTree(userMessage, lang, { isFirstTurn });
     opts.onChunk?.(tree.text, tree.text, "kb");
@@ -107,14 +113,6 @@ export async function chat(
       kbScore: topScore,
     };
   }
-
-  // ── KB had no confident match — try the LLM tiers with KB snippets as grounding ─
-  const ragSnippet = snippetForPrompt(
-    scored.map((s) => s.entry),
-    lang
-  );
-  const webllm = getLocalLLMState();
-  const tf = getTfState();
 
   if (webllm.status === "ready") {
     try {

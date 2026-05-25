@@ -21,6 +21,7 @@ import type { ExtractedPrescription, ExtractedMedicine, LegibilityRecord } from 
 import { speak, stop as ttsStop, isTtsSupported, warmupVoices } from "../lib/tts.ts";
 import { matchTests, type MatchedTest } from "../lib/freeTests.ts";
 import { usePatientProfile } from "../lib/profile.ts";
+import { compressDataUrl } from "../lib/imageCompress.ts";
 
 // Hard-coded "known doctors" list mirror — used purely for the BMDC verification check on
 // scans. Kept in sync with the Doctors page seed; in production this would query a verified
@@ -122,8 +123,14 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
         setFreeTestMatches([]);
       }
 
-      // Save to the signed-in patient's history.
+      // Save to the signed-in patient's history. Includes the compressed uploaded image and
+      // the full extracted payload so the Profile page can replay every detail later.
       if (account) {
+        let imagePreview: string | undefined;
+        if (preview) {
+          try { imagePreview = await compressDataUrl(preview, 800, 0.6); }
+          catch { imagePreview = undefined; }
+        }
         saveScannedPrescription({
           userId: account.id,
           doctor: {
@@ -137,6 +144,8 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
           diagnosisHint: data.diagnosis_hint || undefined,
           followUp: data.follow_up || undefined,
           legibilityScore: typeof data.legibility_score === "number" ? data.legibility_score : undefined,
+          imagePreview,
+          extraction: data as ExtractedPrescription,
         });
       }
     } catch (err: any) {
@@ -165,7 +174,8 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
         const schedText = lng === "bn"
           ? `সকাল ${sched.morning}, দুপুর ${sched.noon}, রাত ${sched.night}`
           : `morning ${sched.morning}, noon ${sched.noon}, night ${sched.night}`;
-        const dur = m.duration ? (lng === "bn" ? `, ${m.duration} ধরে` : `, for ${m.duration}`) : "";
+        const durRaw = lng === "bn" ? (m.duration_bn || m.duration) : (m.duration || m.duration_bn);
+        const dur = durRaw ? (lng === "bn" ? `, ${durRaw} ধরে` : `, for ${durRaw}`) : "";
         const food = sched.before_food ? (lng === "bn" ? ", খাবারের আগে" : ", before food") : sched.after_food ? (lng === "bn" ? ", খাবারের পরে" : ", after food") : "";
         const head = lng === "bn"
           ? `${i + 1} নম্বর ওষুধ ${m.name}${m.strength ? " " + m.strength : ""}`
@@ -401,8 +411,16 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
                 // Long list → compact rows by default, expanded grid only on tap.
                 const useCompact = meds.length > 3;
                 return meds.map((med: ExtractedMedicine, i: number) => (
-                  <motion.div key={i} layout className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                    <button onClick={() => setExpandedMed(expandedMed === i ? null : i)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
+                  <motion.div
+                    key={i}
+                    layout
+                    className="group bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden hover:border-emerald-200 hover:shadow-md transition-all"
+                  >
+                    <button
+                      onClick={() => setExpandedMed(expandedMed === i ? null : i)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                      aria-expanded={expandedMed === i}
+                    >
                       <div className={cn("bg-emerald-50 rounded-lg flex items-center justify-center shrink-0", useCompact ? "w-8 h-8" : "w-10 h-10")}>
                         <Pill size={useCompact ? 14 : 18} className="text-emerald-600" />
                       </div>
@@ -411,19 +429,35 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
                           <p className={cn("font-bold text-gray-900 truncate", useCompact ? "text-sm" : "text-base")}>{med.name}</p>
                           {med.strength && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{med.strength}</span>}
                         </div>
-                        {!useCompact && med.duration && (
-                          <p className="text-[11px] text-gray-500">
-                            <Clock size={10} className="inline -mt-0.5" /> {med.duration}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 flex-wrap mt-1">
-                          <DoseGrid schedule={med.schedule || { morning: 0, noon: 0, night: 0 }} lang={lang as "en" | "bn"} compact />
-                          {useCompact && med.duration && (
-                            <span className="text-[10px] text-gray-500 font-medium">· {med.duration}</span>
-                          )}
-                        </div>
+                        {(() => {
+                          const dur = lang === "bn" ? (med.duration_bn || med.duration) : (med.duration || med.duration_bn);
+                          return (
+                            <>
+                              {!useCompact && dur && (
+                                <p className="text-[11px] text-gray-500">
+                                  <Clock size={10} className="inline -mt-0.5" /> {dur}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 flex-wrap mt-1">
+                                <DoseGrid schedule={med.schedule || { morning: 0, noon: 0, night: 0 }} lang={lang as "en" | "bn"} compact />
+                                {useCompact && dur && (
+                                  <span className="text-[10px] text-gray-500 font-medium">· {dur}</span>
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
-                      {expandedMed === i ? <ChevronUp size={14} className="text-gray-400 shrink-0" /> : <ChevronDown size={14} className="text-gray-400 shrink-0" />}
+                      <span className={cn(
+                        "shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors",
+                        expandedMed === i
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-blue-50 text-blue-700 border-blue-200 group-hover:bg-blue-100 group-hover:border-blue-300"
+                      )}>
+                        {expandedMed === i
+                          ? <><ChevronUp size={11} /> {lang === "bn" ? "কম দেখুন" : "See less"}</>
+                          : <><ChevronDown size={11} /> {lang === "bn" ? "বিস্তারিত দেখুন" : "See details"}</>}
+                      </span>
                     </button>
 
                     <AnimatePresence>
@@ -436,10 +470,12 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
                                 {lang === "bn" ? (med.purpose_bangla || med.purpose_english) : (med.purpose_english || med.purpose_bangla)}
                               </p>
                             )}
-                            {med.warnings && (
+                            {(med.warnings || med.warnings_bn) && (
                               <div className="bg-orange-50 rounded-lg p-2 flex gap-2">
                                 <AlertCircle size={14} className="text-orange-500 shrink-0 mt-0.5" />
-                                <p className="text-xs text-orange-800">{med.warnings}</p>
+                                <p className="text-xs text-orange-800">
+                                  {lang === "bn" ? (med.warnings_bn || med.warnings) : (med.warnings || med.warnings_bn)}
+                                </p>
                               </div>
                             )}
                             <button onClick={() => handleSetReminder(i, med.name)}

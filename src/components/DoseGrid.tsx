@@ -58,13 +58,21 @@ export function DoseGrid({ schedule, lang, compact }: DoseGridProps) {
           );
         })}
       </div>
-      {(foodNote || schedule.notes) && (
-        <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-          <UtensilsCrossed size={12} className="text-gray-400" />
-          {foodNote && <span className="font-medium">{foodNote}</span>}
-          {schedule.notes && <span className="text-gray-500">· {schedule.notes}</span>}
-        </div>
-      )}
+      {(() => {
+        // Prefer the Bangla version of the freeform notes when the UI is in Bangla. Older
+        // saved prescriptions may only have `notes` — falling back keeps them visible.
+        const displayedNote = lang === "bn"
+          ? (schedule.notes_bn || schedule.notes)
+          : (schedule.notes || schedule.notes_bn);
+        if (!foodNote && !displayedNote) return null;
+        return (
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+            <UtensilsCrossed size={12} className="text-gray-400" />
+            {foodNote && <span className="font-medium">{foodNote}</span>}
+            {displayedNote && <span className="text-gray-500">· {displayedNote}</span>}
+          </div>
+        );
+      })()}
     </div>
   );
 }

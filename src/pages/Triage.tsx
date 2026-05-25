@@ -69,13 +69,32 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
+    // Count user turns BEFORE this one (this message has already been pushed). The diagnostic
+    // panel runs only after 3 user turns of symptom-gathering — the LLM does its multi-round
+    // questioning first, so the risk score is grounded in the full picture instead of a single
+    // first-message guess.
+    const userTurnsSoFar = messages.filter(m => m.role === "user").length + 1;
+    const DIAGNOSTIC_AFTER = 3;
+    const allUserSymptoms = [
+      ...messages.filter(m => m.role === "user").map(m => m.content),
+      userMessage,
+    ].join("\n");
+
     // Insert an empty assistant placeholder so streaming tokens can fill in live.
-    // Stamp the same user message onto the assistant turn so the diagnostic panel
-    // (which mounts under the bubble) can run its multi-factor analysis in parallel.
     let placeholderIndex = -1;
     setMessages(prev => {
       placeholderIndex = prev.length;
-      return [...prev, { role: "assistant", content: "", diagnosticForSymptoms: userMessage }];
+      return [
+        ...prev,
+        {
+          role: "assistant",
+          content: "",
+          // Only stamp the diagnostic trigger once we have enough turns. Pass the FULL
+          // concatenated symptom history so the engine reasons over everything, not the
+          // latest message alone.
+          diagnosticForSymptoms: userTurnsSoFar >= DIAGNOSTIC_AFTER ? allUserSymptoms : undefined,
+        },
+      ];
     });
 
     try {
