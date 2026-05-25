@@ -3,6 +3,7 @@ import { X, UserRound, LogIn, UserPlus, AlertCircle } from "lucide-react";
 import { motion } from "motion/react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { signIn, signUp } from "../lib/store.ts";
+import { fbSignInWithGoogle } from "../lib/firebase.ts";
 
 interface AuthModalProps { onClose: () => void; onSuccess?: () => void; }
 
@@ -23,8 +24,27 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
       PASSWORD_TOO_SHORT: { en: "Password must be at least 6 characters.", bn: "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।" },
       NAME_REQUIRED: { en: "Please enter your name.", bn: "আপনার নাম লিখুন।" },
       EMAIL_REQUIRED: { en: "Please enter your email.", bn: "আপনার ইমেইল লিখুন।" },
+      GOOGLE_POPUP_BLOCKED: { en: "Browser blocked the Google sign-in window. Please allow popups for this site.", bn: "ব্রাউজার Google সাইন-ইন উইন্ডো ব্লক করেছে। এই সাইটের জন্য পপআপ Allow করুন।" },
+      GOOGLE_CANCELLED: { en: "Google sign-in cancelled.", bn: "Google সাইন-ইন বাতিল হয়েছে।" },
     };
     return map[code]?.[lang === "bn" ? "bn" : "en"] || code;
+  };
+
+  const handleGoogle = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      await fbSignInWithGoogle();
+      onSuccess?.();
+      onClose();
+    } catch (e: any) {
+      const code = String(e?.code || "");
+      if (code.includes("popup-blocked")) setError(errorMessage("GOOGLE_POPUP_BLOCKED"));
+      else if (code.includes("popup-closed") || code.includes("cancelled-popup")) setError(errorMessage("GOOGLE_CANCELLED"));
+      else setError(e?.message || "Google sign-in failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const submit = async () => {
@@ -69,6 +89,29 @@ export function AuthModal({ onClose, onSuccess }: AuthModalProps) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </header>
+
+        {/* Google sign-in — works for both signup and signin */}
+        <button
+          onClick={handleGoogle}
+          disabled={loading}
+          className="w-full bg-white border border-gray-200 text-gray-800 py-3 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 transition-colors mb-3"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.25 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.07H2.18A11 11 0 0 0 1 12c0 1.78.43 3.46 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.65l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.07l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38z" fill="#EA4335"/>
+          </svg>
+          {lang === "bn" ? "Google দিয়ে চালিয়ে যান" : "Continue with Google"}
+        </button>
+
+        <div className="flex items-center gap-3 mb-3">
+          <div className="h-px bg-gray-100 flex-1" />
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            {lang === "bn" ? "অথবা" : "or"}
+          </span>
+          <div className="h-px bg-gray-100 flex-1" />
+        </div>
 
         {/* Mode toggle */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-5 text-xs">

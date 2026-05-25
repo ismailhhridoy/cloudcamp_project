@@ -187,6 +187,7 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
                     : tone === "amber"  ? "border-amber-200 bg-amber-50 text-amber-700"
                     : tone === "red"    ? "border-red-200 bg-red-50 text-red-700"
                     : "border-gray-100 bg-gray-50 text-gray-500";
+                  const pct = leg ? Math.round((leg.avgScore / 5) * 100) : null;
                   return (
                     <div className={`rounded-lg border p-2 flex items-center gap-2 ${cls}`}>
                       <PenLine size={14} className="shrink-0" />
@@ -195,8 +196,8 @@ export function DoctorsPage({ onLoginRequired, user }: { onLoginRequired: () => 
                           {lang === "bn" ? "হাতের লেখা (AI)" : "Handwriting (AI)"}
                         </p>
                         <p className="text-xs font-bold">
-                          {leg ? `${leg.avgScore} / 5` : (lang === "bn" ? "স্ক্যান নেই" : "no scans")}
-                          {leg && <span className="font-medium opacity-70"> · {leg.scoreCount}</span>}
+                          {pct != null ? `${pct}%` : (lang === "bn" ? "স্ক্যান নেই" : "no scans")}
+                          {leg && <span className="font-medium opacity-70"> · {leg.scoreCount} {lang === "bn" ? "স্ক্যান" : "scans"}</span>}
                         </p>
                       </div>
                     </div>

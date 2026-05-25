@@ -6,6 +6,7 @@ import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
   getAuth, type Auth, onAuthStateChanged, signOut as authSignOut,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile,
+  GoogleAuthProvider, signInWithPopup,
   type User as FirebaseUser,
 } from "firebase/auth";
 import {
@@ -90,6 +91,14 @@ export async function fbSignUp(name: string, email: string, password: string): P
 export async function fbSignIn(email: string, password: string): Promise<AuthUserLite> {
   if (firebaseConfigStatus !== "ok") throw new Error("FIREBASE_NOT_CONFIGURED");
   const cred = await signInWithEmailAndPassword(getAuthSafe(), email.trim(), password);
+  return firebaseUserToLite(cred.user);
+}
+
+export async function fbSignInWithGoogle(): Promise<AuthUserLite> {
+  if (firebaseConfigStatus !== "ok") throw new Error("FIREBASE_NOT_CONFIGURED");
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  const cred = await signInWithPopup(getAuthSafe(), provider);
   return firebaseUserToLite(cred.user);
 }
 

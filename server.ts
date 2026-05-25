@@ -161,11 +161,18 @@ Return ONLY valid minified JSON in EXACTLY this schema. Do not wrap it in markdo
       "generic": "generic name if known",
       "strength": "e.g. 500 mg",
       "form": "tablet|capsule|syrup|drops|injection|cream|inhaler",
-      "schedule": { "morning": 0, "noon": 0, "night": 0, "before_food": true, "after_food": false, "notes": "string|null" },
+      "schedule": {
+        "morning": 0, "noon": 0, "night": 0,
+        "before_food": true, "after_food": false,
+        "notes": "English instruction line if needed (e.g. 'Apply 2-3 times daily on the affected area')",
+        "notes_bn": "একই নির্দেশনা সহজ বাংলায় (যেমন: 'আক্রান্ত স্থানে দিনে ২-৩ বার লাগান')"
+      },
       "duration": "e.g. 5 days",
+      "duration_bn": "ঐ সময়কাল বাংলায় (যেমন: '৫ দিন')",
       "purpose_english": "one short line a layperson understands",
       "purpose_bangla": "একদম সহজ বাংলায়",
-      "warnings": "string|null"
+      "warnings": "English warning if any (e.g. 'Do not exceed 4 doses per day')",
+      "warnings_bn": "ঐ সতর্কতা সহজ বাংলায়"
     }
   ],
   "tests": ["lab test names extracted"],
@@ -182,7 +189,8 @@ Rules:
 - "morning/noon/night" mean number of UNITS per slot (0 if not taken). Common notation: 1+0+1 means morning=1 noon=0 night=1.
 - If a field is not visible, set string fields to null and numeric fields to 0; never invent.
 - legibility_score: 5 = printed/typed and crystal clear, 4 = neat handwriting, 3 = readable with effort, 2 = mostly illegible, 1 = unreadable.
-- nutrition_guidelines must be specific to what was prescribed (e.g. for metformin: low-glycemic diet; for iron tablets: take with vitamin C source; for blood pressure: low salt). 3–6 bullets.`;
+- nutrition_guidelines must be specific to what was prescribed (e.g. for metformin: low-glycemic diet; for iron tablets: take with vitamin C source; for blood pressure: low salt). 3–6 bullets.
+- BILINGUAL FIELDS — for every field that has a sibling ending in "_bn" or "_bangla" (notes_bn, duration_bn, warnings_bn, purpose_bangla, nutrition_guidelines_bn), you MUST populate BOTH the English and the Bangla version. Never leave the Bangla side as null when the English side has content — translate it yourself into simple plain Bangla a rural patient can understand. Doctors often write in English/mixed; the patient may only read Bangla.`;
 
   app.post("/api/scan-prescription", async (req, res) => {
     const { image } = req.body || {};

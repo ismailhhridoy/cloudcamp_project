@@ -141,7 +141,6 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
       <section className="px-6 lg:px-0 space-y-4">
         <div className="flex items-end justify-between px-1">
           <h3 className="text-xl lg:text-2xl font-black text-gray-900">{t('home.services.title')}</h3>
-          <span className="text-[10px] font-bold text-emerald-600">{t('home.services.view_all')}</span>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
@@ -220,9 +219,6 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
                   ? (lang === "bn" ? "আজকের টিপ লোড হচ্ছে..." : "Loading today's tip...")
                   : (tip ? (lang === "bn" ? tip.bn : tip.en) : t('home.tip.desc'))}
               </p>
-              {tip && (
-                <p className="text-[10px] text-emerald-700/60 mt-1.5 italic">{tip.source}</p>
-              )}
             </div>
           </div>
         </div>
