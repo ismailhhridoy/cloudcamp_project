@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Mic, Send, Info, Loader2, MicOff, WifiOff, Cpu, Cloud, BookOpen, UserRound } from "lucide-react";
+import { Mic, Send, Info, Loader2, MicOff, WifiOff, Cpu, Cloud, BookOpen, UserRound, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Markdown from "react-markdown";
 import { cn } from "@/src/lib/utils";
@@ -11,15 +11,24 @@ import { chat as routerChat, type ChatSource } from "../lib/tierRouter.ts";
 import { DiagnosticPanel } from "../components/DiagnosticPanel.tsx";
 import { PatientProfileSheet } from "../components/PatientProfileSheet.tsx";
 import { usePatientProfile, summariseProfile } from "../lib/profile.ts";
+import { listTriageMessages, saveTriageMessages, clearTriageMessages, KEYS, subscribe } from "../lib/store.ts";
+import type { TriageMessage } from "../lib/types.ts";
 
-interface Message { role: "user" | "assistant"; content: string; safety?: { verdict: string; matched: string[]; scrubbedLines?: number }; source?: ChatSource; diagnosticForSymptoms?: string; }
+interface Message { id?: string; timestamp?: string; role: "user" | "assistant"; content: string; safety?: { verdict: string; matched: string[]; scrubbedLines?: number }; source?: ChatSource; diagnosticForSymptoms?: string; }
 interface OfflineRule { keywords: string[]; verdict: string; en: string; bn: string; }
+
+function genMsgId(): string {
+  return `tm_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+}
 
 export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => void; user: User | null }) {
   const { t, lang } = useLanguage();
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: t("triage.welcome") },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const cached = listTriageMessages();
+    if (cached.length > 0) return cached as Message[];
+    return [{ id: genMsgId(), timestamp: new Date().toISOString(), role: "assistant", content: t("triage.welcome") }];
+  });
+  const hydratedOnceRef = useRef(true);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -39,6 +48,33 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, []);
+
+  // Persist chat: every change is mirrored to localStorage + Firestore (if signed in).
+  // We skip persisting the initial welcome-only state — only real conversations get saved.
+  useEffect(() => {
+    if (hydratedOnceRef.current) { hydratedOnceRef.current = false; return; }
+    const onlyWelcome = messages.length === 1 && messages[0].role === "assistant" && messages[0].content === t("triage.welcome");
+    if (onlyWelcome) return;
+    const stamped: TriageMessage[] = messages.map((m) => ({
+      id: m.id || genMsgId(),
+      timestamp: m.timestamp || new Date().toISOString(),
+      role: m.role,
+      content: m.content,
+      source: m.source,
+      safety: m.safety,
+      diagnosticForSymptoms: m.diagnosticForSymptoms,
+    }));
+    saveTriageMessages(stamped);
+  }, [messages, t]);
+
+  // Listen for cross-tab / Firestore-snapshot updates that rewrote the cached chat.
+  useEffect(() => {
+    return subscribe(KEYS.TRIAGE_CHAT_KEY, () => {
+      const fresh = listTriageMessages();
+      if (fresh.length === 0) return;
+      setMessages((prev) => (fresh.length > prev.length ? (fresh as Message[]) : prev));
+    });
   }, []);
 
   // Prefetch offline rules
@@ -66,7 +102,7 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     if (!input.trim() || isLoading) return;
     const userMessage = input.trim();
     setInput("");
-    setMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    setMessages(prev => [...prev, { id: genMsgId(), timestamp: new Date().toISOString(), role: "user", content: userMessage }]);
     setIsLoading(true);
 
     // Count user turns BEFORE this one (this message has already been pushed). The diagnostic
@@ -87,6 +123,8 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
       return [
         ...prev,
         {
+          id: genMsgId(),
+          timestamp: new Date().toISOString(),
           role: "assistant",
           content: "",
           // Only stamp the diagnostic trigger once we have enough turns. Pass the FULL
@@ -207,26 +245,43 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
         )}
       </AnimatePresence>
 
-      {/* Disclaimer */}
-      <div className="bg-amber-50 p-3 flex gap-3 border-b border-amber-100">
-        <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
-        <p className="text-[10px] text-amber-800 leading-tight"><strong>{t("triage.disclaimer")}</strong></p>
+      {/* Disclaimer — text-xs (not 10px) for readability + leading-relaxed for breathing room. */}
+      <div className="bg-amber-50 px-4 py-3 flex items-start gap-3 border-b border-amber-100">
+        <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-900 leading-relaxed font-medium">{t("triage.disclaimer")}</p>
       </div>
 
       {/* Profile bar — drives the diagnostic engine */}
-      <button
-        onClick={() => setShowProfile(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-100 text-left hover:bg-gray-50 transition-colors"
-      >
-        <div className="w-7 h-7 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
-          <UserRound size={14} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t("triage.profile.label")}</p>
-          <p className="text-xs font-medium text-gray-800 truncate">{summariseProfile(profile, lang as "en" | "bn")}</p>
-        </div>
-        <span className="text-[10px] font-bold text-emerald-600">{t("triage.profile.edit")}</span>
-      </button>
+      <div className="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-100">
+        <button
+          onClick={() => setShowProfile(true)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-gray-50 rounded-lg -mx-1 px-1 py-1 transition-colors"
+        >
+          <div className="w-7 h-7 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
+            <UserRound size={14} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t("triage.profile.label")}</p>
+            <p className="text-xs font-medium text-gray-800 truncate">{summariseProfile(profile, lang as "en" | "bn")}</p>
+          </div>
+          <span className="text-[10px] font-bold text-emerald-600 shrink-0">{t("triage.profile.edit")}</span>
+        </button>
+        {messages.length > 1 && (
+          <button
+            onClick={() => {
+              const ok = window.confirm(lang === "bn" ? "চ্যাট মুছে ফেলবেন? এটি ফিরিয়ে আনা যাবে না।" : "Clear this chat? This cannot be undone.");
+              if (!ok) return;
+              clearTriageMessages();
+              setMessages([{ id: genMsgId(), timestamp: new Date().toISOString(), role: "assistant", content: t("triage.welcome") }]);
+            }}
+            className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+            title={lang === "bn" ? "চ্যাট মুছুন" : "Clear chat"}
+          >
+            <Trash2 size={12} />
+            {lang === "bn" ? "মুছুন" : "Clear"}
+          </button>
+        )}
+      </div>
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">

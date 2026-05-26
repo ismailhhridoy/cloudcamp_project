@@ -27,7 +27,10 @@ import { KEYS } from "./store.ts";
 import type {
   SavedPrescription, SubmittedReview, LegibilityRecord, ExternalDoctor,
   AuditSample, Certification, DoctorProfile, PatientProfile, PatientRatingRecord,
+  TriageMessage,
 } from "./types.ts";
+
+const TRIAGE_CHAT_LOCAL_KEY = "shasthyo_triage_chat_v1";
 
 const CONNECTED = () => firebaseConfigStatus === "ok";
 
@@ -138,6 +141,24 @@ function startUserSubscriptions(u: AuthUserLite): void {
       rawSet(KEYS.SAVED_PRESCRIPTIONS_KEY, merged);
     },
     (e) => console.error("[db] prescriptions listener error:", e?.message || e)
+  ));
+
+  // triageChat — single rolling doc at users/{uid}/triageChat/main. Remote replaces local
+  // (chat is a single ordered conversation; merge-by-id doesn't apply).
+  subs.push(onSnapshot(
+    doc(db, "users", u.uid, "triageChat", "main"),
+    (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as { messages?: TriageMessage[] };
+      const remote = Array.isArray(data.messages) ? data.messages : [];
+      const local = rawGet<TriageMessage[]>(TRIAGE_CHAT_LOCAL_KEY, []);
+      // If the remote conversation is longer or strictly newer, take it; otherwise keep local
+      // so an in-flight write doesn't get clobbered by a stale snapshot.
+      if (remote.length >= local.length) {
+        rawSet(TRIAGE_CHAT_LOCAL_KEY, remote);
+      }
+    },
+    (e) => console.warn("[db] triageChat listener", e)
   ));
 
   // reviews
@@ -251,6 +272,16 @@ export function deletePrescription(uid: string, rxId: string): void {
 
 export function writeReview(uid: string, r: SubmittedReview): void {
   safeWrite(() => setDoc(doc(getDb(), "users", uid, "reviews", r.id), clean(r) as DocumentData), "review");
+}
+
+export function writeTriageChat(uid: string, messages: TriageMessage[]): void {
+  safeWrite(
+    () => setDoc(
+      doc(getDb(), "users", uid, "triageChat", "main"),
+      { messages: clean(messages), updatedAt: serverTimestamp() } as DocumentData,
+    ),
+    "triageChat",
+  );
 }
 
 export function writeExternalDoctor(d: ExternalDoctor): void {

@@ -23,24 +23,33 @@ export function PrescriptionDetailModal({ record, onClose }: Props) {
         initial={{ y: "100%", opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: "100%", opacity: 0 }}
-        className="w-full lg:max-w-2xl bg-white rounded-t-3xl lg:rounded-3xl p-5 sm:p-6 max-h-[95vh] overflow-y-auto"
+        className="w-full lg:max-w-2xl bg-white rounded-t-3xl lg:rounded-3xl max-h-[95vh] overflow-y-auto"
       >
-        <header className="flex items-start justify-between mb-4 sticky top-0 bg-white pb-2 z-10">
+        {/* Header sits at the scroll-container's top edge with its own padding + a solid bg
+            + bottom border. This way scrolling content can't peek above the doctor name. */}
+        <header className="sticky top-0 bg-white px-5 sm:px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-3 z-20">
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
               {lang === "bn" ? "প্রেসক্রিপশন বিস্তারিত" : "Prescription details"}
             </p>
-            <h2 className="text-lg font-black text-gray-900 mt-0.5 truncate">
+            <h2 className="text-base sm:text-lg font-black text-gray-900 mt-0.5 truncate">
               {record.doctor.name || (lang === "bn" ? "ডাক্তার শনাক্ত হয়নি" : "Doctor not identified")}
             </h2>
             <p className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
               <Calendar size={11} /> {new Date(record.scannedAt).toLocaleString(lang === "bn" ? "bn-BD" : "en-US")}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 shrink-0">
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 shrink-0 rounded-lg p-1 hover:bg-gray-100"
+            aria-label="Close"
+          >
             <X size={22} />
           </button>
         </header>
+
+        {/* Body content padding moved here so the sticky header above can be full-bleed. */}
+        <div className="px-5 sm:px-6 py-4">
 
         {/* Original uploaded image */}
         {record.imagePreview && (
@@ -189,6 +198,7 @@ export function PrescriptionDetailModal({ record, onClose }: Props) {
         >
           {lang === "bn" ? "বন্ধ করুন" : "Close"}
         </button>
+        </div>
       </motion.div>
     </div>
   );

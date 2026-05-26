@@ -76,15 +76,18 @@ export async function runDiagnostic(opts: RunOpts): Promise<DiagnosticResult> {
   const reason_parts_en: string[] = [];
   const reason_parts_bn: string[] = [];
 
-  // Symptom factor
+  // Symptom factor — show what the patient actually wrote so they can verify the AI heard
+  // them correctly. The KB match goes into the "WHO guideline" row below.
+  const reported = symptoms.trim().replace(/\s+/g, " ").slice(0, 110);
+  const truncated = symptoms.trim().length > 110 ? "…" : "";
+  factors.push({
+    kind: "symptom",
+    label_en: "Symptoms reported",
+    label_bn: "জানানো লক্ষণ",
+    value_en: reported + truncated,
+    value_bn: reported + truncated,
+  });
   if (topEntry) {
-    factors.push({
-      kind: "symptom",
-      label_en: "Symptoms",
-      label_bn: "উপসর্গ",
-      value_en: topEntry.title.en,
-      value_bn: topEntry.title.bn,
-    });
     reason_parts_en.push(topEntry.title.en.toLowerCase());
     reason_parts_bn.push(topEntry.title.bn);
   }

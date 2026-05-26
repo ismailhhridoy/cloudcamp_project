@@ -21,6 +21,20 @@ export interface DoctorProfile {
   rejectedReason?: string;
 }
 
+// Triage conversation persisted per user (local + Firestore). Single rolling chat per device.
+
+export type TriageSource = "cloud" | "kb" | "webllm" | "wasm" | "rules";
+
+export interface TriageMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  source?: TriageSource;
+  safety?: { verdict: string; matched: string[]; scrubbedLines?: number };
+  diagnosticForSymptoms?: string;
+}
+
 // ── User accounts + patient history (the "database" layer) ────────────────
 // Demo-grade local auth: SHA-256(password + salt) stored in localStorage. NOT secure for
 // real production — clearly labelled in the sign-up form. The schema mirrors what a real

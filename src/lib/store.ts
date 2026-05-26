@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import type {
   DoctorProfile, AuditSample, Certification, LegibilityRecord, PatientRatingRecord,
-  UserAccount, SavedPrescription, SubmittedReview, ExternalDoctor,
+  UserAccount, SavedPrescription, SubmittedReview, ExternalDoctor, TriageMessage,
 } from "./types.ts";
 
 const DOCTORS_KEY = "shasthyo_doctors_v1";
@@ -19,6 +19,7 @@ const USER_SESSION_KEY = "shasthyo_user_session_v1";
 const SAVED_PRESCRIPTIONS_KEY = "shasthyo_saved_prescriptions_v1";
 const SUBMITTED_REVIEWS_KEY = "shasthyo_submitted_reviews_v1";
 const EXTERNAL_DOCTORS_KEY = "shasthyo_external_doctors_v1";
+const TRIAGE_CHAT_KEY = "shasthyo_triage_chat_v1";
 
 type Listener = () => void;
 const listeners: Map<string, Set<Listener>> = new Map();
@@ -559,4 +560,28 @@ export const KEYS = {
   SAVED_PRESCRIPTIONS_KEY,
   SUBMITTED_REVIEWS_KEY,
   EXTERNAL_DOCTORS_KEY,
+  TRIAGE_CHAT_KEY,
 };
+
+// ── Advice chat history ────────────────────────────────────────────────────
+// Persisted per device in localStorage, and mirrored to Firestore at
+// users/{uid}/triageChat/main when the user is signed in.
+export function listTriageMessages(): TriageMessage[] {
+  return rawGet<TriageMessage[]>(TRIAGE_CHAT_KEY, []);
+}
+
+export function saveTriageMessages(messages: TriageMessage[]): void {
+  rawSet(TRIAGE_CHAT_KEY, messages);
+  const user = getCurrentUser();
+  if (user) {
+    import("./db.ts").then((m) => m.writeTriageChat(user.id, messages)).catch(() => {});
+  }
+}
+
+export function clearTriageMessages(): void {
+  rawSet(TRIAGE_CHAT_KEY, []);
+  const user = getCurrentUser();
+  if (user) {
+    import("./db.ts").then((m) => m.writeTriageChat(user.id, [])).catch(() => {});
+  }
+}
