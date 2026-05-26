@@ -37,8 +37,16 @@ export function MobileShell({ children, activeTab, setActiveTab }: MobileShellPr
           </div>
         </header>
 
-        {/* Content — pt-0 because header is sticky, pb-20 for bottom nav */}
-        <main className="flex-1 overflow-y-auto pb-20">
+        {/* Content — pt-0 because header is sticky, pb-20 for bottom nav.
+            On the Advice page main is locked to viewport height so the chat's internal
+            scroller is the only scroller and the fixed input bar stays put. */}
+        <main
+          className={
+            activeTab === "triage"
+              ? "flex-1 h-screen overflow-hidden"
+              : "flex-1 overflow-y-auto pb-20"
+          }
+        >
           {children}
         </main>
 
