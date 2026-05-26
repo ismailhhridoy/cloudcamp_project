@@ -163,7 +163,7 @@ export interface ExtractedPrescription {
   legibility_reason: string;
   nutrition_guidelines: string[];              // each item is a short bilingual-or-EN bullet
   nutrition_guidelines_bn?: string[];          // same bullets in Bangla
-  provider: "gemini" | "groq";                 // which model produced this
+  provider: "gemini" | "groq" | "tesseract";   // which model produced this
 }
 
 // ── Patient profile (used by the diagnostic engine) ────────────────────────

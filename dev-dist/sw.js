@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-fc8ce395'], (function (workbox) { 'use strict';
+define(['./workbox-9c758fb1'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -81,7 +81,7 @@ define(['./workbox-fc8ce395'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "/index.html",
-    "revision": "0.78u6hdifra"
+    "revision": "0.frak4eaons8"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
@@ -100,6 +100,17 @@ define(['./workbox-fc8ce395'], (function (workbox) { 'use strict';
     "cacheName": "model-manifest",
     "networkTimeoutSeconds": 3,
     plugins: []
+  }), 'GET');
+  workbox.registerRoute(({
+    url
+  }) => url.origin === "https://cdn.jsdelivr.net" && /\/npm\/@tesseract\.js-data\//.test(url.pathname), new workbox.CacheFirst({
+    "cacheName": "tesseract-langdata",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 8,
+      maxAgeSeconds: 31536000
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
   }), 'GET');
 
 }));

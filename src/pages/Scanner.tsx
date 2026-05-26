@@ -22,6 +22,7 @@ import { speak, stop as ttsStop, isTtsSupported, warmupVoices } from "../lib/tts
 import { matchTests, type MatchedTest } from "../lib/freeTests.ts";
 import { usePatientProfile } from "../lib/profile.ts";
 import { compressDataUrl } from "../lib/imageCompress.ts";
+import { useTesseract, recognize as ocrRecognize, shapeOcrToPrescriptionSmart } from "../lib/tesseractEngine.ts";
 
 // Hard-coded "known doctors" list mirror — used purely for the BMDC verification check on
 // scans. Kept in sync with the Doctors page seed; in production this would query a verified
@@ -44,6 +45,9 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
   const account = useCurrentUser();
   const profile = usePatientProfile();
   const [freeTestMatches, setFreeTestMatches] = useState<MatchedTest[]>([]);
+  const ocr = useTesseract();
+  // True after we ran the offline OCR fallback — used to show an honest banner above the result.
+  const [usedOfflineOcr, setUsedOfflineOcr] = useState(false);
 
   useEffect(() => { warmupVoices(); }, []);
 
@@ -66,9 +70,73 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
     if (!file) return;
     setResult(null);
     setError(null);
+    setUsedOfflineOcr(false);
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
+  };
+
+  // Tier-3 offline fallback: run Tesseract OCR locally (with image preprocessing), then have
+  // the local LLM repair/structure the noisy text into a real ExtractedPrescription. Falls
+  // back to a pure-regex shaper if no LLM is loaded. The Scanner UI is unchanged either way —
+  // just a clearly-labelled lower-confidence result.
+  const runOfflineOcr = async (): Promise<ExtractedPrescription> => {
+    const ocrResult = await ocrRecognize(preview!);
+    return await shapeOcrToPrescriptionSmart(ocrResult);
+  };
+
+  // Shared post-scan persistence — auto-register doctor, aggregate legibility, match free tests,
+  // save scan to user's history. Called from both the cloud and the OCR fallback paths so the
+  // resulting UX (history, Doctors page enrichment) is identical regardless of provider.
+  const persistScanResult = async (data: ExtractedPrescription) => {
+    const bmdcRaw = String(data?.doctor?.bmdc || "").trim();
+    const name = String(data?.doctor?.name || "").trim();
+    const hospital = String(data?.doctor?.hospital || "").trim();
+    if (name) {
+      const idLike = bmdcRaw
+        ? bmdcRaw
+        : `nb_${name.toLowerCase().replace(/[^a-z0-9ঀ-৿]+/gi, "-").slice(0, 40)}${hospital ? "_" + hospital.toLowerCase().replace(/[^a-z0-9ঀ-৿]+/gi, "-").slice(0, 20) : ""}`;
+      upsertExternalDoctor({
+        bmdc: idLike,
+        name,
+        hospital: hospital || undefined,
+        specialty: data?.doctor?.specialization || undefined,
+      });
+      if (typeof data?.legibility_score === "number") {
+        addLegibilityScore(idLike, Number(data.legibility_score), name, data.legibility_reason || undefined);
+      }
+    }
+
+    const tests = Array.isArray(data.tests) ? data.tests : [];
+    if (tests.length > 0) {
+      matchTests(tests, profile.district).then(setFreeTestMatches).catch(() => setFreeTestMatches([]));
+    } else {
+      setFreeTestMatches([]);
+    }
+
+    if (account) {
+      let imagePreview: string | undefined;
+      if (preview) {
+        try { imagePreview = await compressDataUrl(preview, 800, 0.6); }
+        catch { imagePreview = undefined; }
+      }
+      saveScannedPrescription({
+        userId: account.id,
+        doctor: {
+          name: data?.doctor?.name,
+          bmdc: data?.doctor?.bmdc,
+          hospital: data?.doctor?.hospital,
+          specialization: data?.doctor?.specialization,
+        },
+        medicineCount: Array.isArray(data.medicines) ? data.medicines.length : 0,
+        testCount: Array.isArray(data.tests) ? data.tests.length : 0,
+        diagnosisHint: data.diagnosis_hint || undefined,
+        followUp: data.follow_up || undefined,
+        legibilityScore: typeof data.legibility_score === "number" ? data.legibility_score : undefined,
+        imagePreview,
+        extraction: data,
+      });
+    }
   };
 
   const handleUpload = async () => {
@@ -76,8 +144,14 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
     setIsLoading(true);
     setResult(null);
     setError(null);
+    setUsedOfflineOcr(false);
     const base64 = preview.split(",")[1];
     try {
+      // If the browser already knows it's offline, skip the network round-trip and go straight
+      // to the local OCR. Saves ~10s of waiting for the fetch to time out.
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("OFFLINE");
+      }
       const response = await fetch("/api/scan-prescription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,69 +161,32 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
       const data = await response.json();
       if (data.error) throw new Error(data.error);
       setResult(data as ExtractedPrescription);
-
-      // Auto-register the doctor in our directory and aggregate AI legibility against the same
-      // id. Prefer BMDC as the unique id; if the prescription doesn't show one, derive a stable
-      // id from name + hospital so the same doctor across scans dedups (and the legibility
-      // score still has somewhere to land).
-      const bmdcRaw = String(data?.doctor?.bmdc || "").trim();
-      const name = String(data?.doctor?.name || "").trim();
-      const hospital = String(data?.doctor?.hospital || "").trim();
-      if (name) {
-        const idLike = bmdcRaw
-          ? bmdcRaw
-          : `nb_${name.toLowerCase().replace(/[^a-z0-9ঀ-৿]+/gi, "-").slice(0, 40)}${hospital ? "_" + hospital.toLowerCase().replace(/[^a-z0-9ঀ-৿]+/gi, "-").slice(0, 20) : ""}`;
-        upsertExternalDoctor({
-          bmdc: idLike,
-          name,
-          hospital: hospital || undefined,
-          specialty: data?.doctor?.specialization || undefined,
-        });
-        if (typeof data?.legibility_score === "number") {
-          addLegibilityScore(
-            idLike,
-            Number(data.legibility_score),
-            name,
-            data.legibility_reason || undefined
-          );
-        }
-      }
-
-      // Match recommended tests against the free / low-cost provider DB.
-      const tests = Array.isArray(data.tests) ? data.tests : [];
-      if (tests.length > 0) {
-        matchTests(tests, profile.district).then(setFreeTestMatches).catch(() => setFreeTestMatches([]));
-      } else {
-        setFreeTestMatches([]);
-      }
-
-      // Save to the signed-in patient's history. Includes the compressed uploaded image and
-      // the full extracted payload so the Profile page can replay every detail later.
-      if (account) {
-        let imagePreview: string | undefined;
-        if (preview) {
-          try { imagePreview = await compressDataUrl(preview, 800, 0.6); }
-          catch { imagePreview = undefined; }
-        }
-        saveScannedPrescription({
-          userId: account.id,
-          doctor: {
-            name: data?.doctor?.name,
-            bmdc: data?.doctor?.bmdc,
-            hospital: data?.doctor?.hospital,
-            specialization: data?.doctor?.specialization,
-          },
-          medicineCount: Array.isArray(data.medicines) ? data.medicines.length : 0,
-          testCount: Array.isArray(data.tests) ? data.tests.length : 0,
-          diagnosisHint: data.diagnosis_hint || undefined,
-          followUp: data.follow_up || undefined,
-          legibilityScore: typeof data.legibility_score === "number" ? data.legibility_score : undefined,
-          imagePreview,
-          extraction: data as ExtractedPrescription,
-        });
-      }
+      await persistScanResult(data as ExtractedPrescription);
     } catch (err: any) {
-      setError(err.message || "Failed to analyze. Please try with a clearer image.");
+      // Cloud path failed — fall back to Tesseract OCR running fully in-browser. This is the
+      // offline-first promise: even with no network or a dead cloud key, the user still gets a
+      // best-effort read of the prescription. The shaped result is clearly labelled (banner +
+      // legibility_reason) so users know to treat it with extra care.
+      try {
+        const data = await runOfflineOcr();
+        setResult(data);
+        setUsedOfflineOcr(true);
+        await persistScanResult(data);
+        // Don't show an error — we recovered. Surface the fallback via the banner instead.
+        setError(null);
+      } catch (ocrErr: any) {
+        console.error("Offline OCR fallback also failed", ocrErr);
+        // Show the friendlier error: if Tesseract isn't downloaded yet, tell them where to go.
+        const ocrMissing = String(ocrErr?.message || "").toLowerCase().includes("network")
+          || ocr.status === "idle";
+        setError(
+          ocrMissing
+            ? (lang === "bn"
+                ? "অনলাইন স্ক্যান ব্যর্থ। অফলাইন OCR এখনো ডাউনলোড হয়নি — সেটিংসে গিয়ে অফলাইন AI ডাউনলোড করুন।"
+                : "Online scan failed. Offline OCR isn't downloaded yet — open Settings and tap 'Download Offline AI'.")
+            : (err?.message || "Failed to analyze. Please try with a clearer image.")
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -288,6 +325,24 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
       <AnimatePresence>
         {result && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+
+            {/* Offline OCR banner — honest about the lower accuracy when Tesseract produced this
+                result instead of the cloud model. */}
+            {usedOfflineOcr && (
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 flex items-start gap-3">
+                <AlertCircle size={18} className="text-blue-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-blue-900">
+                    {lang === "bn" ? "অফলাইন OCR দিয়ে স্ক্যান হয়েছে" : "Scanned with offline OCR"}
+                  </p>
+                  <p className="text-xs text-blue-800 mt-0.5 leading-relaxed">
+                    {lang === "bn"
+                      ? "ইন্টারনেট না থাকায় Tesseract OCR ব্যবহার করা হয়েছে। এটি ছাপা লেখায় ভালো কাজ করে, হাতের লেখায় কম নির্ভুল। প্রতিটি ওষুধের নাম ও মাত্রা ডাক্তারের সাথে যাচাই করুন।"
+                      : "No connection — used Tesseract OCR locally. It's reliable on printed text but less accurate on handwriting. Please verify every medicine name and dose with a doctor."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Not signed in → this scan is NOT being saved to history. Make that visible. */}
             {!account && (

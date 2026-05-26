@@ -5,7 +5,6 @@ import Markdown from "react-markdown";
 import { cn } from "@/src/lib/utils";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { User } from "firebase/auth";
-import { useLocalLLM } from "../lib/llm.ts";
 import { useTfEngine } from "../lib/transformersEngine.ts";
 import { chat as routerChat, type ChatSource } from "../lib/tierRouter.ts";
 import { DiagnosticPanel } from "../components/DiagnosticPanel.tsx";
@@ -13,6 +12,7 @@ import { PatientProfileSheet } from "../components/PatientProfileSheet.tsx";
 import { usePatientProfile, summariseProfile } from "../lib/profile.ts";
 import { listTriageMessages, saveTriageMessages, clearTriageMessages, KEYS, subscribe } from "../lib/store.ts";
 import type { TriageMessage } from "../lib/types.ts";
+import { startManualRecording, isVoiceReady, type ManualRecorder } from "../lib/voiceEngine.ts";
 
 interface Message { id?: string; timestamp?: string; role: "user" | "assistant"; content: string; safety?: { verdict: string; matched: string[]; scrubbedLines?: number }; source?: ChatSource; diagnosticForSymptoms?: string; }
 interface OfflineRule { keywords: string[]; verdict: string; en: string; bn: string; }
@@ -36,7 +36,6 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
   const [offlineRules, setOfflineRules] = useState<OfflineRule[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const llm = useLocalLLM();
   const tf = useTfEngine();
   const profile = usePatientProfile();
   const [showProfile, setShowProfile] = useState(false);
@@ -170,54 +169,48 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     }
   };
 
-  const toggleRecording = async () => {
-    if (isRecording) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-      return;
-    }
+  // Hybrid voice input. Online + Web Speech API available → use it (free, fast, no model). Offline
+  // OR if the user has downloaded the Whisper-tiny model → use the on-device Whisper pipeline so
+  // the mic button works without internet. Both modes are tap-to-start, tap-again-to-stop.
+  const [voiceMode, setVoiceMode] = useState<"idle" | "recording" | "transcribing">("idle");
+  const manualRecRef = useRef<ManualRecorder | null>(null);
 
-    // Step 1 — request mic permission explicitly
+  const startWebSpeech = async (): Promise<void> => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((t) => t.stop());
     } catch {
       alert(lang === "bn"
         ? "মাইক্রোফোন ব্যবহারের অনুমতি দিন। ব্রাউজার সেটিংস থেকে Allow করুন।"
         : "Microphone access denied. Please allow it in your browser settings.");
       return;
     }
-
-    // Step 2 — check browser support (all vendor prefixes)
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition ||
-      (window as any).mozSpeechRecognition ||
-      (window as any).msSpeechRecognition;
-
+      (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
+      // Browser doesn't have Web Speech — fall through to offline Whisper if available.
+      if (isVoiceReady()) return startWhisper();
       alert(lang === "bn"
-        ? "আপনার ব্রাউজার ভয়েস সাপোর্ট করে না। Chrome বা Safari ব্যবহার করুন।"
-        : "Voice not supported in this browser. Please use Chrome or Safari.");
+        ? "আপনার ব্রাউজার ভয়েস সাপোর্ট করে না। সেটিংসে গিয়ে অফলাইন AI ডাউনলোড করুন।"
+        : "Voice not supported in this browser. Download Offline AI in Settings to enable on-device voice.");
       return;
     }
-
-    // Step 3 — start recognition
     const recognition = new SpeechRecognition();
     recognition.lang = lang === "bn" ? "bn-BD" : "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
-
-    recognition.onresult = (e: any) => {
-      setInput(e.results[0][0].transcript);
-      setIsRecording(false);
-    };
+    recognition.onresult = (e: any) => { setInput(e.results[0][0].transcript); setIsRecording(false); };
     recognition.onerror = (e: any) => {
       if (e.error === "not-allowed") {
-        alert(lang === "bn"
-          ? "মাইক্রোফোন ব্লক করা আছে। সেটিংস থেকে Allow করুন।"
-          : "Microphone blocked. Allow it in browser settings.");
+        alert(lang === "bn" ? "মাইক্রোফোন ব্লক করা আছে।" : "Microphone blocked.");
+      } else if (e.error === "network" || e.error === "service-not-allowed") {
+        // Web Speech fell over (often happens when offline). Fall back to Whisper if loaded.
+        if (isVoiceReady()) { void startWhisper(); }
+        else alert(lang === "bn"
+          ? "ভয়েস সার্ভিস উপলব্ধ নেই। সেটিংসে গিয়ে অফলাইন AI ডাউনলোড করুন।"
+          : "Voice service unavailable. Download Offline AI in Settings for offline voice.");
       }
       setIsRecording(false);
     };
@@ -225,6 +218,57 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     recognitionRef.current = recognition;
     recognition.start();
     setIsRecording(true);
+  };
+
+  const startWhisper = async (): Promise<void> => {
+    try {
+      const rec = await startManualRecording(lang as "en" | "bn", (s) => setVoiceMode(s));
+      manualRecRef.current = rec;
+      setIsRecording(true);
+    } catch (e: any) {
+      console.error("[voice] mic open failed", e);
+      alert(lang === "bn"
+        ? "মাইক্রোফোন চালু করা যায়নি। অনুমতি দিন এবং আবার চেষ্টা করুন।"
+        : "Could not open the microphone. Please allow access and try again.");
+      setIsRecording(false);
+      setVoiceMode("idle");
+    }
+  };
+
+  const stopWhisper = async (): Promise<void> => {
+    const rec = manualRecRef.current;
+    if (!rec) return;
+    manualRecRef.current = null;
+    try {
+      const text = await rec.stop();
+      if (text) setInput(text);
+    } catch (e) {
+      console.error("[voice] transcription failed", e);
+    } finally {
+      setIsRecording(false);
+      setVoiceMode("idle");
+    }
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      // If we're using Whisper, stop & transcribe. Otherwise stop Web Speech recognition.
+      if (manualRecRef.current) { await stopWhisper(); return; }
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+    // Choose engine: offline OR Whisper-loaded prefers Whisper (accuracy & true-offline). Online
+    // + Whisper-not-loaded uses Web Speech (free, no model download).
+    const useWhisper = isVoiceReady() && (!navigator.onLine || isVoiceReady());
+    if (!navigator.onLine && !isVoiceReady()) {
+      alert(lang === "bn"
+        ? "অফলাইন ভয়েসের জন্য সেটিংসে গিয়ে অফলাইন AI ডাউনলোড করুন।"
+        : "For offline voice input, download Offline AI in Settings.");
+      return;
+    }
+    if (useWhisper) await startWhisper();
+    else await startWebSpeech();
   };
 
   return (
@@ -363,12 +407,17 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
             </button>
           </div>
         </div>
-        {isRecording && (
+        {isRecording && voiceMode !== "transcribing" && (
           <p className="text-center text-xs text-red-500 font-medium mt-2 animate-pulse">
-            {lang === "bn" ? "শুনছি... কথা বলুন" : "Listening... speak now"}
+            {lang === "bn" ? "শুনছি... কথা বলুন · থামাতে আবার ট্যাপ করুন" : "Listening... speak now · tap again to stop"}
           </p>
         )}
-        <EngineStatus isOffline={isOffline} llmStatus={llm.status} tfStatus={tf.status} t={t} />
+        {voiceMode === "transcribing" && (
+          <p className="text-center text-xs text-blue-600 font-medium mt-2">
+            {lang === "bn" ? "অফলাইন ভয়েস প্রক্রিয়া হচ্ছে..." : "Transcribing offline voice..."}
+          </p>
+        )}
+        <EngineStatus isOffline={isOffline} tfStatus={tf.status} t={t} />
       </div>
       </div>
     </div>
@@ -379,7 +428,6 @@ function SourcePill({ source, t }: { source: ChatSource; t: (k: string) => strin
   const map = {
     cloud: { c: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <Cloud size={10} />, key: "triage.source.cloud" },
     kb: { c: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: <BookOpen size={10} />, key: "triage.source.kb" },
-    webllm: { c: "bg-blue-50 text-blue-700 border-blue-200", icon: <Cpu size={10} />, key: "triage.source.webllm" },
     wasm: { c: "bg-purple-50 text-purple-700 border-purple-200", icon: <Cpu size={10} />, key: "triage.source.wasm" },
     rules: { c: "bg-amber-50 text-amber-700 border-amber-200", icon: <BookOpen size={10} />, key: "triage.source.rules" },
   } as const;
@@ -391,12 +439,11 @@ function SourcePill({ source, t }: { source: ChatSource; t: (k: string) => strin
   );
 }
 
-function EngineStatus({ isOffline, llmStatus, tfStatus, t }: { isOffline: boolean; llmStatus: string; tfStatus: string; t: (k: string) => string }) {
+function EngineStatus({ isOffline, tfStatus, t }: { isOffline: boolean; tfStatus: string; t: (k: string) => string }) {
   let key: string | null = null;
-  if (isOffline && llmStatus === "ready") key = "triage.engine.webllmActive";
-  else if (isOffline && tfStatus === "ready") key = "triage.engine.wasmActive";
+  if (isOffline && tfStatus === "ready") key = "triage.engine.wasmActive";
   else if (isOffline) key = "triage.engine.rulesActive";
-  else if (llmStatus === "ready" || tfStatus === "ready") key = "triage.engine.localReady";
+  else if (tfStatus === "ready") key = "triage.engine.localReady";
   if (!key) return null;
   return <p className="text-center text-[10px] text-gray-400 font-medium mt-2">{t(key)}</p>;
 }
