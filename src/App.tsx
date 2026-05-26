@@ -23,8 +23,9 @@ import { LogIn, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "./lib/LanguageContext.tsx";
 import { getConsent } from "./lib/consent.ts";
-import { autoLoadIfCached } from "./lib/llm.ts";
 import { autoLoadTfIfOptedIn } from "./lib/transformersEngine.ts";
+import { autoLoadIfCached as autoLoadOcrIfCached } from "./lib/tesseractEngine.ts";
+import { autoLoadIfCached as autoLoadVoiceIfCached } from "./lib/voiceEngine.ts";
 import { hasPatientProfile } from "./lib/profile.ts";
 import { PatientProfileSheet } from "./components/PatientProfileSheet.tsx";
 import { firebaseConfigStatus } from "./lib/firebase.ts";
@@ -50,8 +51,9 @@ export default function App() {
     });
     // Boot both offline engines in the background if the user has previously opted in. This way
     // they're ready by the time the patient opens Triage — no extra click after a reload.
-    autoLoadIfCached();
     autoLoadTfIfOptedIn();
+    autoLoadOcrIfCached();
+    autoLoadVoiceIfCached();
 
     // Bootstrap Firestore sync (no-op if config is still MOCK).
     const stopDbSync = initDbSync();

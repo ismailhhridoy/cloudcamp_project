@@ -30,10 +30,11 @@ export default defineConfig(({mode}) => {
           ],
         },
         workbox: {
-          // Larger max size: we want index + chunks cached for offline app shell. The LLM model
-          // weights are NOT cached here — WebLLM manages its own IndexedDB cache.
-          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,svg,woff2,json}'],
+          // Larger max size: app shell + tesseract-core .wasm files (~3.3MB each) need to be
+          // precached for true offline. LLM weights are NOT cached here — WebLLM manages its
+          // own IndexedDB cache.
+          maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,svg,woff2,json,wasm}'],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
@@ -46,6 +47,21 @@ export default defineConfig(({mode}) => {
               urlPattern: ({url}) => url.pathname === '/model-manifest.json',
               handler: 'NetworkFirst',
               options: {cacheName: 'model-manifest', networkTimeoutSeconds: 3},
+            },
+            {
+              // Tesseract.js language data is fetched from jsdelivr on first OCR run. Cache
+              // forever so every subsequent prescription scan works offline. ~10-17MB per
+              // language file (eng + ben). Opaque responses (status 0) included so cross-
+              // origin fetches are still cached when CORS headers vary.
+              urlPattern: ({url}) =>
+                url.origin === 'https://cdn.jsdelivr.net' &&
+                /\/npm\/@tesseract\.js-data\//.test(url.pathname),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'tesseract-langdata',
+                expiration: {maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365},
+                cacheableResponse: {statuses: [0, 200]},
+              },
             },
           ],
         },

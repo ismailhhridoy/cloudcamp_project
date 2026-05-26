@@ -1,21 +1,19 @@
-// KB-FIRST router. Designed for low-end devices where a 0.5–1.5B LLM is slow or unstable.
+// KB-FIRST router. Tier 2 (WebGPU WebLLM) was removed — too heavy for the rural low-end
+// Android devices we target. The single offline model tier is now Tier 1 (Transformers.js,
+// SmolLM2 / small Qwen on WASM-CPU).
 //
 // Strategy:
 //   1. If online and cloud is allowed, use Groq — best quality, fast.
-//   2. Otherwise: try the curated KB (BM25) FIRST. If the top result clears a confidence threshold,
-//      return that answer immediately (sub-10ms). The KB is curated, accurate, and bilingual —
-//      this is the right answer for the common case on a weak device.
-//   3. Only if the KB has no confident match do we engage the LLM tiers (WebLLM → Transformers.js).
-//      The LLM acts as the natural-language wrapper for the long tail.
-//   4. If all else fails, return a polite "couldn't help" message.
+//   2. Otherwise: prefer the local LLM (Tier 1) when loaded. The KB provides grounding (RAG).
+//   3. If no local LLM: answer directly from the curated decision tree (sub-10ms, vetted).
+//   4. Last resort: best-effort tree answer + apology.
 
-import { getLLMSettings, getLocalLLMState, chatLocal, type LocalChatMessage } from "./llm.ts";
-import { getTfState, chatTf, type TfChatMessage } from "./transformersEngine.ts";
+import { getTfSettings, getTfState, chatTf, type TfChatMessage } from "./transformersEngine.ts";
 import { retrieveWithScore, snippetForPrompt } from "./rag.ts";
 import { answerFromTree } from "./decisionTree.ts";
 import { classifySymptoms, buildSafetyPromptHint } from "./safety.ts";
 
-export type ChatSource = "cloud" | "kb" | "webllm" | "wasm" | "rules";
+export type ChatSource = "cloud" | "kb" | "wasm" | "rules";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -67,11 +65,10 @@ export async function chat(
   const lang = pickLang(userMessage, opts.lang);
   const safety = classifySymptoms(userMessage);
 
-  const settings = getLLMSettings();
+  const settings = getTfSettings();
   const online = typeof navigator !== "undefined" ? navigator.onLine : true;
-  const webllm = getLocalLLMState();
   const tf = getTfState();
-  const hasLocalLLM = webllm.status === "ready" || tf.status === "ready";
+  const hasLocalLLM = tf.status === "ready";
 
   // Always run RAG so KB snippets are available as grounding for whichever tier answers.
   const scored = await retrieveWithScore(userMessage, 3);
@@ -79,8 +76,8 @@ export async function chat(
   const ragIds = scored.map((s) => s.entry.id);
   const ragSnippet = snippetForPrompt(scored.map((s) => s.entry), lang);
 
-  // ── Tier 3: Cloud (online, not force-local) ──────────────────────────────
-  if (online && !settings.forceLocal) {
+  // ── Cloud (online preferred) ─────────────────────────────────────────────
+  if (online) {
     try {
       const res = await fetch("/api/triage", {
         method: "POST",
@@ -112,28 +109,6 @@ export async function chat(
       ragHits: tree.matchedEntryIds,
       kbScore: topScore,
     };
-  }
-
-  if (webllm.status === "ready") {
-    try {
-      const sys = buildSystemFromRag(ragSnippet, lang);
-      const safetyHint = buildSafetyPromptHint(safety);
-      const seed: LocalChatMessage[] = [{ role: "system", content: sys }];
-      if (safetyHint) seed.push({ role: "system", content: safetyHint });
-      for (const m of history) seed.push({ role: m.role, content: m.content });
-      const text = await chatLocal(seed, userMessage, (chunk, full) =>
-        opts.onChunk?.(chunk, full, "webllm")
-      );
-      return {
-        text,
-        source: "webllm",
-        safety: { verdict: safety.verdict, matched: safety.matched },
-        ragHits: ragIds,
-        kbScore: topScore,
-      };
-    } catch (e) {
-      console.warn("[router] webllm failed, falling back", e);
-    }
   }
 
   if (tf.status === "ready") {
