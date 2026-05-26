@@ -283,8 +283,9 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
         )}
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Messages — extra bottom padding on mobile so the last message isn't hidden
+          behind the fixed input bar (input ~120px + bottom nav ~68px + breathing room). */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 pb-48 lg:pb-4 space-y-4">
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -322,9 +323,13 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
         </AnimatePresence>
       </div>
 
-      {/* Quick prompts */}
+      {/* Quick prompts + Input — pinned above the bottom navbar on mobile.
+          BottomNav is fixed bottom-0 with py-3 (~68px tall); we sit just above it via
+          `bottom-[68px]` and a safe-area inset so iOS home-indicator devices don't clip.
+          On desktop (lg+) we revert to inline flow inside the bordered card. */}
+      <div className="fixed left-0 right-0 bottom-[68px] max-w-md mx-auto lg:static lg:max-w-none lg:mx-0 lg:bottom-auto bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] lg:shadow-lg z-40">
       {messages.length === 1 && (
-        <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+        <div className="px-4 pt-3 pb-1 flex gap-2 overflow-x-auto no-scrollbar">
           {[
             { en: "Fever & headache", bn: "জ্বর ও মাথাব্যথা" },
             { en: "Chest pain", bn: "বুকে ব্যথা" },
@@ -340,7 +345,7 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
       )}
 
       {/* Input */}
-      <div className="p-4 pb-20 lg:pb-4 bg-white border-t border-gray-100 shadow-lg">
+      <div className="p-3 lg:p-4">
         <div className="flex items-center gap-2">
           <motion.button whileTap={{ scale: 0.9 }} onClick={toggleRecording}
             className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg",
@@ -364,6 +369,7 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
           </p>
         )}
         <EngineStatus isOffline={isOffline} llmStatus={llm.status} tfStatus={tf.status} t={t} />
+      </div>
       </div>
     </div>
   );
