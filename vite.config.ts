@@ -30,11 +30,13 @@ export default defineConfig(({mode}) => {
           ],
         },
         workbox: {
-          // Larger max size: app shell + tesseract-core .wasm files (~3.3MB each) need to be
-          // precached for true offline. LLM weights are NOT cached here — WebLLM manages its
-          // own IndexedDB cache.
-          maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
-          globPatterns: ['**/*.{js,css,html,ico,svg,woff2,json,wasm}'],
+          // App shell + small assets are precached. Large WASM files (ONNX Runtime ~23MB,
+          // tesseract-core ~3MB each) are excluded from precache via globIgnores and instead
+          // runtime-cached on first use — this avoids the build failing on Render/Vercel where
+          // the service-worker precache manifest has a hard size gate.
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,svg,woff2,json}'],
+          globIgnores: ['**/*.wasm'],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
@@ -47,6 +49,20 @@ export default defineConfig(({mode}) => {
               urlPattern: ({url}) => url.pathname === '/model-manifest.json',
               handler: 'NetworkFirst',
               options: {cacheName: 'model-manifest', networkTimeoutSeconds: 3},
+            },
+            {
+              // Large WASM files (ONNX Runtime, Tesseract core) — runtime-cached on first
+              // load so they're offline-ready after the initial page visit. Not precached
+              // because the 23MB ort-wasm file blows the build-time precache limit.
+              urlPattern: ({request, url}) =>
+                url.origin === self.location.origin &&
+                (request.destination === '' || request.destination === 'script') &&
+                /\.wasm(\.js)?$/.test(url.pathname),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'wasm-runtime',
+                expiration: {maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365},
+              },
             },
             {
               // Tesseract.js language data is fetched from jsdelivr on first OCR run. Cache
