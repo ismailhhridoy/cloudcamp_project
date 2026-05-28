@@ -13,7 +13,7 @@ export function TopBar({ onLoginClick }: TopBarProps) {
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-100 shadow-sm">
       {/* Mobile header (hidden on lg) */}
-      <div className="lg:hidden p-4 flex items-center justify-between">
+      <div className="lg:hidden px-4 py-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="relative">
   <img
@@ -21,9 +21,7 @@ export function TopBar({ onLoginClick }: TopBarProps) {
     alt="CareAid AI"
     className="h-8 w-auto object-contain"
   />
-  <p className="absolute bottom-1.5 left-16 text-[12px] font-medium leading-none" style={{color: '#34D399'}}>
-    {lang === "bn" ? "স্বাস্থ্য সহায়ক" : "Health Companion"}
-  </p>
+  
 </div>
         </div>
         <div className="flex items-center gap-2">
