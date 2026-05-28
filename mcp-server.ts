@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
-// ShasthyoAI MCP Server — exposes the medical knowledge base, clinical triage, prescription
+// CareAid AI MCP Server — exposes the medical knowledge base, clinical triage, prescription
 // scanning, and diagnostic scoring as Model Context Protocol tools. This lets any MCP-capable
-// client (Claude Desktop, Cursor, n8n, custom agents) tap into ShasthyoAI's clinical
+// client (Claude Desktop, Cursor, n8n, custom agents) tap into CareAid AI's clinical
 // intelligence without running the full web app.
 //
 // Transports:
@@ -85,15 +85,15 @@ function bm25Search(query: string, top = 3): { entry: KbEntry; score: number }[]
 
 // ── Create the MCP server ─────────────────────────────────────────────────
 const server = new McpServer({
-  name: "shasthyoai",
+  name: "careaid-ai",
   version: "1.0.0",
-  description: "ShasthyoAI — offline-first rural telehealth tools for Bangladesh. Exposes clinical triage, medical KB search, symptom safety classification, and diagnostic scoring.",
+  description: "CareAid AI — offline-first rural telehealth tools for Bangladesh. Exposes clinical triage, medical KB search, symptom safety classification, and diagnostic scoring.",
 });
 
 // ── Tool 1: Triage symptoms ──────────────────────────────────────────────
 server.tool(
   "triage_symptoms",
-  "Assess patient symptoms using the ShasthyoAI clinical decision tree. Returns a severity classification (mild/urgent/critical), tailored advice, and when to see a doctor. Bilingual (English + Bangla).",
+  "Assess patient symptoms using the CareAid AI clinical decision tree. Returns a severity classification (mild/urgent/critical), tailored advice, and when to see a doctor. Bilingual (English + Bangla).",
   {
     symptoms: z.string().describe("Patient's symptoms in English or Bangla"),
     lang: z.enum(["en", "bn"]).default("en").describe("Response language"),
@@ -166,7 +166,7 @@ server.tool(
 // ── Tool 2: Search medical KB ────────────────────────────────────────────
 server.tool(
   "search_medical_kb",
-  "Search the ShasthyoAI medical knowledge base (82 bilingual clinical protocols covering common rural Bangladesh conditions). Returns matching entries with severity, advice, and referral guidance.",
+  "Search the CareAid AI medical knowledge base (82 bilingual clinical protocols covering common rural Bangladesh conditions). Returns matching entries with severity, advice, and referral guidance.",
   {
     query: z.string().describe("Search query — symptoms, condition name, or keywords in English or Bangla"),
     lang: z.enum(["en", "bn"]).default("en").describe("Response language"),
@@ -201,7 +201,7 @@ server.tool(
 // ── Tool 3: Safety classifier ────────────────────────────────────────────
 server.tool(
   "classify_safety",
-  "Run the ShasthyoAI bilingual safety classifier on patient input. Detects 30+ red-flag patterns (cardiac, respiratory, obstetric, psychiatric, paediatric emergencies) in English and Bangla. Returns critical/urgent/routine verdict.",
+  "Run the CareAid AI bilingual safety classifier on patient input. Detects 30+ red-flag patterns (cardiac, respiratory, obstetric, psychiatric, paediatric emergencies) in English and Bangla. Returns critical/urgent/routine verdict.",
   {
     text: z.string().describe("Patient's message or symptom description"),
   },
@@ -230,7 +230,7 @@ server.tool(
 // ── Tool 4: List all KB conditions ───────────────────────────────────────
 server.tool(
   "list_conditions",
-  "List all medical conditions in the ShasthyoAI knowledge base, grouped by severity. Useful for understanding the system's clinical coverage.",
+  "List all medical conditions in the CareAid AI knowledge base, grouped by severity. Useful for understanding the system's clinical coverage.",
   {
     severity_filter: z.enum(["all", "critical", "urgent", "mild"]).default("all").describe("Filter by severity level"),
     lang: z.enum(["en", "bn"]).default("en").describe("Response language"),
@@ -261,7 +261,7 @@ server.tool(
 // ── Tool 5: Get condition detail ─────────────────────────────────────────
 server.tool(
   "get_condition",
-  "Get full details for a specific medical condition from the ShasthyoAI knowledge base by ID. Returns bilingual title, summary, advice, and referral guidance.",
+  "Get full details for a specific medical condition from the CareAid AI knowledge base by ID. Returns bilingual title, summary, advice, and referral guidance.",
   {
     condition_id: z.string().describe("Condition ID (e.g. 'fever-adult-mild', 'dengue', 'choking-infant')"),
   },
@@ -304,13 +304,13 @@ server.tool(
 // ── Resource: Medical KB metadata ────────────────────────────────────────
 server.resource(
   "kb-metadata",
-  "shasthyoai://kb/metadata",
+  "careaid://kb/metadata",
   async (uri) => ({
     contents: [{
       uri: uri.href,
       mimeType: "application/json",
       text: JSON.stringify({
-        name: "ShasthyoAI Medical Knowledge Base",
+        name: "CareAid AI Medical Knowledge Base",
         version: kb.version,
         updated_at: kb.updatedAt,
         source: kb.source,
@@ -369,7 +369,7 @@ if (useSSE) {
     }
   });
   httpServer.listen(SSE_PORT, () => {
-    console.error(`[mcp] ShasthyoAI MCP server (SSE) listening on http://localhost:${SSE_PORT}`);
+    console.error(`[mcp] CareAid AI MCP server (SSE) listening on http://localhost:${SSE_PORT}`);
     console.error(`[mcp] SSE endpoint: http://localhost:${SSE_PORT}/sse`);
     console.error(`[mcp] Health check: http://localhost:${SSE_PORT}/health`);
   });
@@ -377,5 +377,5 @@ if (useSSE) {
   // stdio transport — for Claude Desktop, Cursor, CLI.
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("[mcp] ShasthyoAI MCP server running on stdio");
+  console.error("[mcp] CareAid AI MCP server running on stdio");
 }

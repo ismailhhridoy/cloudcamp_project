@@ -17,7 +17,7 @@ const CONFIG_KEY = "shasthyo_docs_config_v2";
 const ADMIN_KEY = "shasthyo_docs_admin_v1";
 // Shared admin unlock secret — visit /docs?admin=<this> once to unlock the admin panel on a
 // device. Hackathon-grade gating (not a real auth boundary).
-export const ADMIN_SECRET = "shasthyoai2026";
+export const ADMIN_SECRET = "careaid2026";
 
 export interface TeamMember {
   name: string;
@@ -48,7 +48,7 @@ export const DEFAULT_CONFIG: DocsConfig = {
   enabled: true,
   startISO: DEFAULT_START,
   endISO: DEFAULT_END,
-  teamName: "Team ShasthyoAI",
+  teamName: "Team CareAid AI",
   team: [
     { name: "Add your name", role: "Founder / Full-stack", email: "you@example.com", isNRB: false, isFemale: false },
   ],

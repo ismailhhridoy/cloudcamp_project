@@ -104,7 +104,7 @@ function AppMain() {
       <div className="flex items-center justify-center h-screen bg-emerald-900">
         <div className="text-center space-y-4">
           <Loader2 className="animate-spin text-emerald-400 w-12 h-12 mx-auto" />
-          <div className="text-white font-bold tracking-widest uppercase text-xs">Loading ShasthyoAI...</div>
+          <div className="text-white font-bold tracking-widest uppercase text-xs">Loading CareAid AI...</div>
         </div>
       </div>
     );

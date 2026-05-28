@@ -13,7 +13,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
 const geminiKey = process.env.GEMINI_API_KEY || "";
 const gemini = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
-const TRIAGE_SYSTEM = `You are ShasthyoAI (স্বাস্থ্য সহায়ক), a compassionate AI health assistant for rural Bangladesh.
+const TRIAGE_SYSTEM = `You are CareAid AI (স্বাস্থ্য সহায়ক), a compassionate AI health assistant for rural Bangladesh.
 
 You operate under Bangladesh Medical & Dental Council (BMDC) rules, the DGHS Telemedicine Practice Guideline 2020,
 and WHO Ethics & Governance of AI for Health (2021). You are NOT a licensed practitioner.
@@ -416,7 +416,7 @@ Rules:
 
   const createMcpServer = () => {
     const z = zod.z;
-    const s = new McpServerClass({ name: "shasthyoai", version: "1.0.0" });
+    const s = new McpServerClass({ name: "careaid-ai", version: "1.0.0" });
     s.tool("triage_symptoms", "Assess patient symptoms using clinical decision tree", {
       symptoms: z.string(), lang: z.enum(["en", "bn"]).default("en"),
     }, async ({ symptoms }: any) => {
@@ -480,7 +480,7 @@ Rules:
     app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
-  app.listen(PORT, "0.0.0.0", () => console.log(`🚀 ShasthyoAI running on http://localhost:${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => console.log(`🚀 CareAid AI running on http://localhost:${PORT}`));
 }
 
 startServer();
