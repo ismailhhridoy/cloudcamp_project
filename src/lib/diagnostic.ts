@@ -46,21 +46,74 @@ function riskLevelOf(score: number): RiskLevel {
   return "low";
 }
 
+// A candidate condition the patient can confirm. We never silently commit to the top BM25 match
+// any more — instead we surface the top few and let the patient pick the closest one. The patient
+// is the authority on their own symptoms; this turns a brittle keyword guess into a confirmation.
+export interface DiagnosticCandidate {
+  id: string;
+  title_en: string;
+  title_bn: string;
+  severity: "mild" | "urgent" | "critical";
+  score: number;
+}
+
+export interface CandidateResult {
+  candidates: DiagnosticCandidate[];
+  // When the safety classifier flags a clear emergency we skip the confirm step entirely and go
+  // straight to the verdict — you don't ask someone to tap a button during a heart attack.
+  forceImmediate: boolean;
+  safetyVerdict: "critical" | "urgent" | "routine";
+}
+
+// Fast, geolocation-free lookup of the top candidate conditions for a symptom description.
+export async function getDiagnosticCandidates(symptoms: string, _lang: "en" | "bn"): Promise<CandidateResult> {
+  const safety = classifySymptoms(symptoms);
+  const matches = await retrieveWithScore(symptoms, 3);
+  const candidates: DiagnosticCandidate[] = matches.map((m) => ({
+    id: m.entry.id,
+    title_en: m.entry.title.en,
+    title_bn: m.entry.title.bn,
+    severity: m.entry.severity,
+    score: Math.round(m.score * 100) / 100,
+  }));
+  return {
+    candidates,
+    forceImmediate: safety.verdict === "critical",
+    safetyVerdict: safety.verdict,
+  };
+}
+
 interface RunOpts {
   symptoms: string;
   profile: PatientProfile;
   lang: "en" | "bn";
+  // When set, lock the diagnostic to this KB entry (the one the patient confirmed) instead of
+  // letting BM25 pick the top match. This is how "confirm, don't commit" feeds back in.
+  forcedEntryId?: string;
 }
 
 export async function runDiagnostic(opts: RunOpts): Promise<DiagnosticResult> {
-  const { symptoms, profile, lang } = opts;
+  const { symptoms, profile, lang, forcedEntryId } = opts;
   const regional = await loadRegional();
   const safety = classifySymptoms(symptoms);
 
-  // 1) Match against KB.
+  // 1) Match against KB. If the patient confirmed a specific condition, lock to it; otherwise
+  // use the top BM25 match.
   const matches = await retrieveWithScore(symptoms, 3);
-  const topEntry = matches[0]?.entry;
-  const matchedKbIds = matches.map((m) => m.entry.id);
+  let orderedMatches = matches;
+  if (forcedEntryId) {
+    const picked = matches.find((m) => m.entry.id === forcedEntryId);
+    if (picked) {
+      orderedMatches = [picked, ...matches.filter((m) => m.entry.id !== forcedEntryId)];
+    } else {
+      // The confirmed entry wasn't in the top-3 — fetch it directly and put it first.
+      const extra = await retrieveWithScore(forcedEntryId.replace(/-/g, " "), 5);
+      const found = extra.find((m) => m.entry.id === forcedEntryId);
+      if (found) orderedMatches = [found, ...matches];
+    }
+  }
+  const topEntry = orderedMatches[0]?.entry;
+  const matchedKbIds = orderedMatches.map((m) => m.entry.id);
 
   let score = topEntry ? severityBase(topEntry.severity) : 20;
   let severity: DiagnosticResult["severity"] = topEntry?.severity || "mild";
@@ -156,7 +209,7 @@ export async function runDiagnostic(opts: RunOpts): Promise<DiagnosticResult> {
   if (profile.district) {
     const trends = regional.trends.filter((t) => t.district === profile.district);
     for (const trend of trends) {
-      const symptomMatchesTrend = matches.some((m) =>
+      const symptomMatchesTrend = orderedMatches.some((m) =>
         trend.diseaseTags.some((tag) =>
           [...m.entry.tags_en, ...m.entry.tags_bn, m.entry.title.en, m.entry.title.bn]
             .join(" ").toLowerCase()

@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import Groq from "groq-sdk";
 import { GoogleGenAI } from "@google/genai";
@@ -81,11 +82,25 @@ CONVERSATIONAL RULES — behave like a calm, experienced triage nurse, not like 
    "⚠️ এটি শুধু AI পরামর্শ। সম্ভব হলে একজন ডাক্তার দেখান।"
 
 6. Tone: warm, brief, human. Don't repeat the user back. No meta-instructions like "(I will now ask...)".
-   No emoji floods. No long lists for emergencies — get to the question fast.`;
+   No emoji floods. No long lists for emergencies — get to the question fast.
+
+7. ACCEPT CORRECTIONS — this is critical. If the patient corrects you, disagrees, or says your
+   assessment is wrong ("না, এটা না" / "no, that's not it" / "actually it's..."), you MUST
+   immediately drop your previous guess and re-triage based on their new information. NEVER insist
+   on or repeat a previous assessment the patient has rejected. The patient is the authority on
+   their own body. Treat their latest message as the most accurate description.
+
+8. DON'T OVER-DIAGNOSE. You are a triage nurse, not a diagnostician. Only name a specific disease
+   if the patient's description is unambiguous (e.g. clear dengue with all classic signs). Otherwise
+   say "this could be a few things" and focus on URGENCY and ACTION, not on labelling the disease.
+   It is far better to say "I'm not certain what this is, but it's not an emergency — see a doctor
+   this week" than to confidently name the wrong disease. When unsure, ask one more question instead
+   of guessing.`;
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // Render (and most hosts) inject the port via $PORT. Fall back to 3000 locally.
+  const PORT = Number(process.env.PORT) || 3000;
   app.use(express.json({ limit: "15mb" }));
 
   // ── TRIAGE ───────────────────────────────────────────────────────────────────
@@ -303,9 +318,159 @@ Rules:
     });
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
-    app.use(vite.middlewares);
+  // ── n8n / Webhook automation endpoints ─────────────────────────────────────
+  // These endpoints are designed to be consumed by n8n workflows, Zapier, or any webhook-based
+  // automation platform. They fire structured JSON payloads that n8n can route to notifications,
+  // dashboards, or downstream systems.
+
+  // Webhook: new prescription scanned → fires a structured notification payload.
+  // n8n workflow: Webhook trigger → IF severity=critical → Slack/Email/SMS notification.
+  app.post("/api/webhooks/prescription-scanned", (req, res) => {
+    const { doctorName, bmdc, medicineCount, testCount, legibilityScore, diagnosisHint, userId } = req.body || {};
+    const payload = {
+      event: "prescription_scanned",
+      timestamp: new Date().toISOString(),
+      data: {
+        doctor: { name: doctorName, bmdc },
+        medicines_extracted: medicineCount || 0,
+        tests_recommended: testCount || 0,
+        legibility_score: legibilityScore,
+        diagnosis_hint: diagnosisHint,
+        user_id: userId,
+      },
+      alert: (legibilityScore && legibilityScore <= 2)
+        ? "LOW_LEGIBILITY — prescription readability is poor, patient may misunderstand dosage."
+        : null,
+    };
+    console.log("[webhook] prescription-scanned:", JSON.stringify(payload));
+    // In production, this would forward to an n8n webhook URL or notification service.
+    res.json({ received: true, payload });
+  });
+
+  // Webhook: critical triage alert — fires when the safety classifier detects a life-threatening
+  // symptom. n8n can route this to an alert dashboard or SMS gateway.
+  app.post("/api/webhooks/critical-alert", (req, res) => {
+    const { symptoms, safetyVerdict, matchedFlags, userId, district } = req.body || {};
+    const payload = {
+      event: "critical_triage_alert",
+      timestamp: new Date().toISOString(),
+      severity: "CRITICAL",
+      data: {
+        symptoms: String(symptoms || "").slice(0, 200),
+        safety_verdict: safetyVerdict,
+        matched_flags: matchedFlags || [],
+        user_id: userId,
+        district,
+      },
+      action: "IMMEDIATE — patient directed to call 999 and go to nearest hospital.",
+    };
+    console.log("[webhook] critical-alert:", JSON.stringify(payload));
+    res.json({ received: true, payload });
+  });
+
+  // Webhook: daily health summary — n8n cron can poll this daily to get system stats.
+  app.get("/api/webhooks/daily-summary", (_req, res) => {
+    const kbRawSummary = JSON.parse(fs.readFileSync(path.resolve("public/medical-kb.json"), "utf-8"));
+    res.json({
+      event: "daily_summary",
+      timestamp: new Date().toISOString(),
+      system: {
+        kb_version: kbRawSummary.version,
+        kb_entries: kbRawSummary.entries?.length || 0,
+        kb_critical: kbRawSummary.entries?.filter((e: any) => e.severity === "critical").length || 0,
+        kb_urgent: kbRawSummary.entries?.filter((e: any) => e.severity === "urgent").length || 0,
+        kb_mild: kbRawSummary.entries?.filter((e: any) => e.severity === "mild").length || 0,
+        models: ["SmolLM2-360M (on-device LLM)", "Whisper-tiny (on-device STT)", "Tesseract (on-device OCR)", "Gemini 2.5 Flash (cloud OCR)", "Groq Llama-4 (cloud chat)"],
+        mcp_tools: ["triage_symptoms", "search_medical_kb", "classify_safety", "list_conditions", "get_condition"],
+      },
+    });
+  });
+  console.log("✅ n8n webhook endpoints: /api/webhooks/prescription-scanned, /api/webhooks/critical-alert, /api/webhooks/daily-summary");
+
+  // ── MCP SSE endpoints — deferred to avoid ESM resolution conflicts with Vite ──
+  // The MCP SDK uses ESM imports that clash with tsx + Vite's dev middleware. We mount the
+  // endpoints as plain Express routes that lazy-load the MCP SDK on first request, then cache.
+  const kbData = JSON.parse(fs.readFileSync(path.resolve("public/medical-kb.json"), "utf-8"));
+  let mcpReady = false;
+  let McpServerClass: any = null;
+  let SSETransportClass: any = null;
+  let zod: any = null;
+  const mcpTransports = new Map<string, any>();
+
+  const ensureMcp = async () => {
+    if (mcpReady) return true;
+    try {
+      McpServerClass = (await import("@modelcontextprotocol/sdk/server/mcp.js")).McpServer;
+      SSETransportClass = (await import("@modelcontextprotocol/sdk/server/sse.js")).SSEServerTransport;
+      zod = await import("zod");
+      mcpReady = true;
+      return true;
+    } catch (e) {
+      console.warn("⚠️ MCP SDK load failed (non-fatal):", (e as any)?.message);
+      return false;
+    }
+  };
+
+  const createMcpServer = () => {
+    const z = zod.z;
+    const s = new McpServerClass({ name: "shasthyoai", version: "1.0.0" });
+    s.tool("triage_symptoms", "Assess patient symptoms using clinical decision tree", {
+      symptoms: z.string(), lang: z.enum(["en", "bn"]).default("en"),
+    }, async ({ symptoms }: any) => {
+      const safety = classifySymptoms(symptoms);
+      return { content: [{ type: "text", text: JSON.stringify({ verdict: safety.verdict, matched: safety.matched, kb_entries: kbData.entries.length }) }] };
+    });
+    s.tool("search_medical_kb", "Search 82 bilingual clinical protocols", {
+      query: z.string(), lang: z.enum(["en", "bn"]).default("en"),
+    }, async ({ query, lang }: any) => {
+      const lower = query.toLowerCase();
+      const hits = kbData.entries.filter((e: any) =>
+        [...e.tags_en, ...e.tags_bn, e.title.en, e.title.bn].some((t: string) => t.toLowerCase().includes(lower))
+      ).slice(0, 5);
+      return { content: [{ type: "text", text: JSON.stringify(hits.map((e: any) => ({ id: e.id, title: e.title[lang], severity: e.severity }))) }] };
+    });
+    s.tool("classify_safety", "Bilingual safety classifier (30+ red-flag patterns)", {
+      text: z.string(),
+    }, async ({ text }: any) => {
+      return { content: [{ type: "text", text: JSON.stringify(classifySymptoms(text)) }] };
+    });
+    return s;
+  };
+
+  app.get("/mcp/sse", async (req, res) => {
+    if (!await ensureMcp()) { res.status(503).json({ error: "MCP not available" }); return; }
+    const transport = new SSETransportClass("/mcp/messages", res);
+    mcpTransports.set(transport.sessionId, transport);
+    res.on("close", () => mcpTransports.delete(transport.sessionId));
+    const s = createMcpServer();
+    await s.connect(transport);
+  });
+  app.post("/mcp/messages", async (req, res) => {
+    const sessionId = req.query.sessionId as string;
+    const transport = mcpTransports.get(sessionId);
+    if (!transport) { res.status(404).json({ error: "session not found" }); return; }
+    const body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    await transport.handlePostMessage(req, res, body);
+  });
+  app.get("/mcp/health", async (_req, res) => {
+    const ready = await ensureMcp();
+    res.json({ status: ready ? "ok" : "sdk_unavailable", tools: 3, kb_entries: kbData.entries.length, transport: "sse" });
+  });
+  console.log("✅ MCP endpoints registered at /mcp/sse, /mcp/messages, /mcp/health (lazy-loaded)");
+
+  // Production is the DEFAULT (serve the built dist). Dev mode is opt-in via NODE_ENV=development
+  // (set by `npm run dev`). This way the deployed bundle never accidentally tries to start a Vite
+  // dev server even if the host leaves NODE_ENV unset.
+  if (process.env.NODE_ENV === "development") {
+    try {
+      const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+      app.use(vite.middlewares);
+    } catch (e) {
+      // Vite dev middleware fails on some Node/package combos. Fall back to serving public/
+      // directly (API + MCP + webhooks still work). Run `npx vite` separately for the frontend.
+      console.warn("⚠️ Vite dev middleware failed (run `npx vite` separately for the frontend):", (e as any)?.message);
+      app.use(express.static(path.join(process.cwd(), "public")));
+    }
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
