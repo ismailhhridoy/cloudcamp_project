@@ -30,7 +30,7 @@ export function Sidebar({ activeTab, setActiveTab, onLoginClick }: SidebarProps)
       {/* Logo */}
       <div className="p-6 flex items-center gap-3 border-b border-emerald-900/60">
         <img
-  src="/public/icons/CareAid%20Ai%20logo.png"
+  src="/icons/CareAid-Aid-logo.png"
   alt="ShasthyoAI"
   className="w-10 h-10 rounded-xl shrink-0 object-cover"
 />
