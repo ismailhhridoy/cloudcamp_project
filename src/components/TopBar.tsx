@@ -19,9 +19,9 @@ export function TopBar({ onLoginClick }: TopBarProps) {
   <img
     src="/icons/CareAid-Ai-Logo.png"
     alt="CareAid AI"
-    className="h-9 w-auto object-contain"
+    className="h-8 w-auto object-contain"
   />
-  <p className="text-[9px] text-emerald-600 font-medium leading-none mt-0.5">
+  <p className="absolute bottom-1.5 left-16 text-[12px] font-medium leading-none" style={{color: '#34D399'}}>
     {lang === "bn" ? "স্বাস্থ্য সহায়ক" : "Health Companion"}
   </p>
 </div>
