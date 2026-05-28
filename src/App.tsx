@@ -55,11 +55,19 @@ function AppMain() {
   const { t } = useLanguage();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    // In mock/error mode `auth` is null — calling onAuthStateChanged(null, …) throws and breaks
+    // the whole app. Guard it: if Firebase isn't configured, drop the loading gate and run as a
+    // signed-out (local-only) app.
+    let unsubscribe = () => {};
+    if (firebaseConfigStatus === "ok" && auth) {
+      unsubscribe = onAuthStateChanged(auth, (u) => {
+        setUser(u);
+        setLoading(false);
+        if (u) setShowLoginModal(false);
+      });
+    } else {
       setLoading(false);
-      if (u) setShowLoginModal(false);
-    });
+    }
     // Boot both offline engines in the background if the user has previously opted in. This way
     // they're ready by the time the patient opens Triage — no extra click after a reload.
     autoLoadTfIfOptedIn();
