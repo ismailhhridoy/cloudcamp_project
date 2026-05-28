@@ -35,7 +35,7 @@ export function Sidebar({ activeTab, setActiveTab, onLoginClick }: SidebarProps)
       alt="CareAid AI"
       className="h-13 w-auto object-contain"
     />
-<p className="absolute bottom-3 left-24 text-[12px]  text-emerald-300/60 font-medium leading-none">
+<p className="absolute bottom-1.5 left-24 text-[12px]  text-emerald-600 font-medium leading-none">
   {lang === "bn" ? "স্বাস্থ্য সহায়ক" : "Health Companion"}
 </p>
   </div>
