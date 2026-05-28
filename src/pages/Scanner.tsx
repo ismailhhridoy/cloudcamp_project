@@ -15,7 +15,6 @@ import {
   saveScannedPrescription,
   saveSubmittedReview,
   upsertExternalDoctor,
-  listExternalDoctors,
 } from "../lib/store.ts";
 import type { ExtractedPrescription, ExtractedMedicine, LegibilityRecord } from "../lib/types.ts";
 import { speak, stop as ttsStop, isTtsSupported, warmupVoices } from "../lib/tts.ts";
@@ -51,13 +50,16 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
 
   useEffect(() => { warmupVoices(); }, []);
 
-  // BMDC verification: cross-reference against seeded + onboarded + auto-registered (external) pool.
+  // BMDC verification: cross-reference against seeded + onboarded doctors only. We deliberately
+  // do NOT add auto-registered external doctors here — those are derived from prescription scans
+  // and many carry a SYNTHETIC id (`nb_...`) when the scan had no real BMDC. Adding them would
+  // make a doctor falsely show "verified" on the second scan of the same prescription. A doctor
+  // is "verified" only if their real BMDC is seeded or an approved onboarded account.
   const verifiedBmdcs = useMemo(() => {
     const set = new Set<string>(SEEDED_BMDCS);
     for (const d of listDoctors()) {
       if (d.bmdcNumber && d.approvalStatus === "approved") set.add(d.bmdcNumber);
     }
-    for (const d of listExternalDoctors()) set.add(d.bmdc);
     return set;
   }, [result]);
 
@@ -674,7 +676,11 @@ function DoctorRatingModal({ doctor, lang, onLoginRequired, onClose }: any) {
     if (legibleScore === 0) return;
     setSubmitting(true);
     try {
-      // Best-effort log to the server endpoint.
+      // Best-effort log to the server endpoint. Abort after 8s so a slow/stalled connection can't
+      // hold the request open indefinitely — local + Firestore persistence below is the real
+      // source of truth, so timing out here is harmless.
+      const rateAbort = new AbortController();
+      const rateTimer = setTimeout(() => rateAbort.abort(), 8000);
       fetch("/api/rate-doctor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -684,7 +690,10 @@ function DoctorRatingModal({ doctor, lang, onLoginRequired, onClose }: any) {
           ratings: { legible: legibleScore },
           comment,
         }),
-      }).catch(() => { /* ignore — local + Firestore persistence below is the source of truth */ });
+        signal: rateAbort.signal,
+      })
+        .catch(() => { /* ignore — local + Firestore persistence below is the source of truth */ })
+        .finally(() => clearTimeout(rateTimer));
       // Persist to the signed-in user's review history so it shows up on Profile + Firestore.
       saveSubmittedReview({
         userId: account.id,

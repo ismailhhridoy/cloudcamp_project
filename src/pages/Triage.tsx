@@ -28,7 +28,9 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     if (cached.length > 0) return cached as Message[];
     return [{ id: genMsgId(), timestamp: new Date().toISOString(), role: "assistant", content: t("triage.welcome") }];
   });
-  const hydratedOnceRef = useRef(true);
+  // Signature of the last-persisted chat. Persistence keys off CONTENT CHANGE, not effect
+  // run-count, so the first real message always persists and StrictMode double-runs are no-ops.
+  const lastPersistedSigRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -50,11 +52,15 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
   }, []);
 
   // Persist chat: every change is mirrored to localStorage + Firestore (if signed in).
-  // We skip persisting the initial welcome-only state — only real conversations get saved.
   useEffect(() => {
-    if (hydratedOnceRef.current) { hydratedOnceRef.current = false; return; }
+    const sig = JSON.stringify(messages.map((m) => [m.role, m.content, m.source, m.diagnosticForSymptoms]));
+    // First run: record the hydrated-from-storage signature WITHOUT re-persisting it (we just
+    // loaded it). Every later run persists only when the content actually changed.
+    if (lastPersistedSigRef.current === null) { lastPersistedSigRef.current = sig; return; }
+    if (sig === lastPersistedSigRef.current) return; // no real change → no write
     const onlyWelcome = messages.length === 1 && messages[0].role === "assistant" && messages[0].content === t("triage.welcome");
-    if (onlyWelcome) return;
+    if (onlyWelcome) { lastPersistedSigRef.current = sig; return; }
+    lastPersistedSigRef.current = sig;
     const stamped: TriageMessage[] = messages.map((m) => ({
       id: m.id || genMsgId(),
       timestamp: m.timestamp || new Date().toISOString(),
@@ -115,24 +121,23 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
       userMessage,
     ].join("\n");
 
-    // Insert an empty assistant placeholder so streaming tokens can fill in live.
-    let placeholderIndex = -1;
-    setMessages(prev => {
-      placeholderIndex = prev.length;
-      return [
-        ...prev,
-        {
-          id: genMsgId(),
-          timestamp: new Date().toISOString(),
-          role: "assistant",
-          content: "",
-          // Only stamp the diagnostic trigger once we have enough turns. Pass the FULL
-          // concatenated symptom history so the engine reasons over everything, not the
-          // latest message alone.
-          diagnosticForSymptoms: userTurnsSoFar >= DIAGNOSTIC_AFTER ? allUserSymptoms : undefined,
-        },
-      ];
-    });
+    // Insert an empty assistant placeholder so streaming tokens can fill in live. Match it by a
+    // stable `id` (NOT array index): in React's concurrent/batched mode a captured index can be
+    // wrong or never set, which silently drops every streamed chunk. The id is bulletproof.
+    const placeholderId = genMsgId();
+    setMessages(prev => [
+      ...prev,
+      {
+        id: placeholderId,
+        timestamp: new Date().toISOString(),
+        role: "assistant",
+        content: "",
+        // Only stamp the diagnostic trigger once we have enough turns. Pass the FULL
+        // concatenated symptom history so the engine reasons over everything, not the
+        // latest message alone.
+        diagnosticForSymptoms: userTurnsSoFar >= DIAGNOSTIC_AFTER ? allUserSymptoms : undefined,
+      },
+    ]);
 
     try {
       const result = await routerChat(
@@ -142,15 +147,15 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
           lang,
           onChunk: (_chunk, full, source) => {
             setMessages(prev =>
-              prev.map((m, i) => (i === placeholderIndex ? { ...m, content: full, source } : m))
+              prev.map(m => (m.id === placeholderId ? { ...m, content: full, source } : m))
             );
           },
         }
       );
       // Final settle (also sets safety + source if it wasn't streamed).
       setMessages(prev =>
-        prev.map((m, i) =>
-          i === placeholderIndex
+        prev.map(m =>
+          m.id === placeholderId
             ? { ...m, content: result.text, safety: result.safety as any, source: result.source }
             : m
         )
@@ -158,8 +163,8 @@ export function TriagePage({ onLoginRequired, user }: { onLoginRequired: () => v
     } catch (err) {
       console.error("Triage router failed completely", err);
       setMessages(prev =>
-        prev.map((m, i) =>
-          i === placeholderIndex
+        prev.map(m =>
+          m.id === placeholderId
             ? { ...m, content: checkOffline(userMessage), source: "rules" as ChatSource }
             : m
         )

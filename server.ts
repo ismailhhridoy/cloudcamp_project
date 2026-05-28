@@ -305,15 +305,18 @@ Rules:
   // ── OFFLINE TRIAGE ───────────────────────────────────────────────────────────
   app.get("/api/offline-triage", (_req, res) => {
     res.json({
+      // Keywords include common Bangla spelling variants — ব্যথা / ব্যাথা, ডায়রিয়া / ডায়েরিয়া,
+      // জ্বর / জর — because rural users type phonetically and inconsistently. Missing a variant
+      // means missing an emergency, so we over-include spellings.
       rules: [
-        { keywords: ["chest pain","বুকে ব্যথা","heart attack"], verdict: "GO_NOW", en: "Chest pain can be a heart attack. Go to hospital IMMEDIATELY.", bn: "বুকে ব্যথা হার্ট অ্যাটাকের লক্ষণ। এখনই হাসপাতালে যান।" },
-        { keywords: ["can't breathe","শ্বাস নিতে পারছি না","breathless","শ্বাসকষ্ট"], verdict: "GO_NOW", en: "Breathing difficulty is an emergency. Go NOW.", bn: "শ্বাসকষ্ট জরুরি অবস্থা। এখনই হাসপাতালে যান।" },
-        { keywords: ["unconscious","অজ্ঞান","fainted"], verdict: "GO_NOW", en: "Loss of consciousness needs emergency care.", bn: "অজ্ঞান হলে তাৎক্ষণিক চিকিৎসা দরকার।" },
-        { keywords: ["infant fever","শিশু জ্বর","baby fever","বাচ্চার জ্বর"], verdict: "GO_NOW", en: "High fever in infants is dangerous. See a doctor now.", bn: "শিশুর জ্বর বিপজ্জনক। এখনই ডাক্তার দেখান।" },
-        { keywords: ["severe bleeding","প্রচুর রক্ত"], verdict: "GO_NOW", en: "Severe bleeding needs urgent hospital care.", bn: "প্রচুর রক্তপাত হলে তাৎক্ষণিক হাসপাতালে যান।" },
-        { keywords: ["mild fever","সামান্য জ্বর","cold","সর্দি","cough","কাশি"], verdict: "HOME", en: "Rest, drink fluids, take paracetamol. Monitor for 2 days.", bn: "বিশ্রাম নিন, পানি পান করুন, প্যারাসিটামল খান।" },
-        { keywords: ["diarrhea","ডায়রিয়া","loose motion","পাতলা পায়খানা"], verdict: "HOME", en: "Drink ORS. Go to hospital if blood appears.", bn: "খাবার স্যালাইন খান। রক্ত দেখলে হাসপাতাল যান।" },
-        { keywords: ["headache","মাথাব্যথা","body pain","গায়ে ব্যথা"], verdict: "WATCH", en: "Rest and hydrate. See doctor if pain lasts 3+ days.", bn: "বিশ্রাম নিন। ৩ দিনের বেশি থাকলে ডাক্তার দেখান।" },
+        { keywords: ["chest pain","বুকে ব্যথা","বুকে ব্যাথা","বুক ব্যথা","বুক ব্যাথা","heart attack","হার্ট অ্যাটাক"], verdict: "GO_NOW", en: "Chest pain can be a heart attack. Go to hospital IMMEDIATELY.", bn: "বুকে ব্যথা হার্ট অ্যাটাকের লক্ষণ। এখনই হাসপাতালে যান।" },
+        { keywords: ["can't breathe","cannot breathe","শ্বাস নিতে পারছি না","breathless","শ্বাসকষ্ট","শ্বাস কষ্ট","দম বন্ধ"], verdict: "GO_NOW", en: "Breathing difficulty is an emergency. Go NOW.", bn: "শ্বাসকষ্ট জরুরি অবস্থা। এখনই হাসপাতালে যান।" },
+        { keywords: ["unconscious","অজ্ঞান","অচেতন","fainted","জ্ঞান হারিয়েছে"], verdict: "GO_NOW", en: "Loss of consciousness needs emergency care.", bn: "অজ্ঞান হলে তাৎক্ষণিক চিকিৎসা দরকার।" },
+        { keywords: ["infant fever","শিশু জ্বর","শিশুর জ্বর","baby fever","বাচ্চার জ্বর","বাচ্চার জর","নবজাতকের জ্বর"], verdict: "GO_NOW", en: "High fever in infants is dangerous. See a doctor now.", bn: "শিশুর জ্বর বিপজ্জনক। এখনই ডাক্তার দেখান।" },
+        { keywords: ["severe bleeding","প্রচুর রক্ত","অতিরিক্ত রক্ত","রক্তক্ষরণ","রক্তপাত"], verdict: "GO_NOW", en: "Severe bleeding needs urgent hospital care.", bn: "প্রচুর রক্তপাত হলে তাৎক্ষণিক হাসপাতালে যান।" },
+        { keywords: ["mild fever","সামান্য জ্বর","হালকা জ্বর","জ্বর","জর","cold","সর্দি","ঠান্ডা","cough","কাশি"], verdict: "HOME", en: "Rest, drink fluids, take paracetamol. Monitor for 2 days.", bn: "বিশ্রাম নিন, পানি পান করুন, প্যারাসিটামল খান।" },
+        { keywords: ["diarrhea","diarrhoea","ডায়রিয়া","ডায়েরিয়া","ডাইরিয়া","loose motion","পাতলা পায়খানা","পাতলা পায়খানা"], verdict: "HOME", en: "Drink ORS. Go to hospital if blood appears.", bn: "খাবার স্যালাইন খান। রক্ত দেখলে হাসপাতাল যান।" },
+        { keywords: ["headache","মাথাব্যথা","মাথা ব্যথা","মাথা ব্যাথা","মাথাব্যাথা","body pain","গায়ে ব্যথা","গায়ে ব্যাথা","শরীর ব্যথা"], verdict: "WATCH", en: "Rest and hydrate. See doctor if pain lasts 3+ days.", bn: "বিশ্রাম নিন। ৩ দিনের বেশি থাকলে ডাক্তার দেখান।" },
       ],
     });
   });

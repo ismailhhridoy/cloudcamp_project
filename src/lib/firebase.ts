@@ -58,9 +58,11 @@ export function getAuthSafe(): Auth {
   return _auth;
 }
 
-// Legacy compat exports — keep these named the way the rest of the app already imports them.
-export const db = _db as Firestore;
-export const auth = _auth as Auth;
+// Legacy compat exports — nullable on purpose. In mock/error mode these are null, so callers
+// MUST guard (e.g. `if (auth) …`) or branch on `firebaseConfigStatus` before use. The non-null
+// `getDb()` / `getAuthSafe()` helpers exist for code paths that have already confirmed config.
+export const db: Firestore | null = _db;
+export const auth: Auth | null = _auth;
 
 // ── Real Firebase Auth (email/password) helpers ──────────────────────────
 export interface AuthUserLite {
