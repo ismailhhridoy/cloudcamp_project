@@ -29,11 +29,13 @@ export function Sidebar({ activeTab, setActiveTab, onLoginClick }: SidebarProps)
     <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-64 lg:flex-col lg:bg-emerald-950 lg:text-white">
       {/* Logo */}
       <div className="p-6 flex items-center gap-3 border-b border-emerald-900/60">
-        <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shrink-0">
-          <span className="text-white font-bold text-xl">S</span>
-        </div>
+        <img
+  src="/icons/CareAid-Aid-logo.png"
+  alt="CareAid AI"
+  className="w-10 h-10 rounded-xl shrink-0 object-cover"
+/>
         <div>
-          <p className="font-bold text-base leading-tight">ShasthyoAI</p>
+          <p className="font-bold text-base leading-tight">CareAid AI</p>
           <p className="text-[10px] text-emerald-300 leading-tight">{lang === "bn" ? "স্বাস্থ্য সহায়ক" : "Health Companion"}</p>
         </div>
       </div>

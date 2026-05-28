@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "shasthyoai": {
+    "careaid-ai": {
       "command": "npx",
       "args": ["tsx", "mcp-server.ts"],
       "cwd": ".",
-      "description": "ShasthyoAI — offline-first rural telehealth tools for Bangladesh. Exposes clinical triage, medical KB search (82 bilingual protocols), safety classification, and diagnostic scoring via MCP.",
+      "description": "CareAid AI — offline-first rural telehealth tools for Bangladesh. Exposes clinical triage, medical KB search (82 bilingual protocols), safety classification, and diagnostic scoring via MCP.",
       "tools": [
         "triage_symptoms",
         "search_medical_kb",
@@ -13,7 +13,7 @@
         "get_condition"
       ],
       "resources": [
-        "shasthyoai://kb/metadata"
+        "careaid://kb/metadata"
       ]
     }
   }

@@ -243,11 +243,11 @@ export function seedDemoDoctorIfEmpty(): void {
   const demo: DoctorProfile = {
     id: "doc_demo_seed",
     fullName: "Dr. Demo Verifier",
-    email: "demo@shasthyoai.local",
+    email: "demo@careaid.local",
     bmdcNumber: "A-99999",
     specialty: "General Medicine",
     qualification: "MBBS, FCPS",
-    hospital: "ShasthyoAI Demo Clinic",
+    hospital: "CareAid AI Demo Clinic",
     district: "Dhaka",
     yearsExperience: 8,
     approvalStatus: "approved",
