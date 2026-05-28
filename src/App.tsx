@@ -15,6 +15,7 @@ import { CompliancePage } from "./pages/Compliance.tsx";
 import { DoctorPortal } from "./pages/DoctorPortal.tsx";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { PatientProfilePage } from "./pages/PatientProfile.tsx";
+import { DocsPage } from "./pages/Docs.tsx";
 import { AuthModal } from "./components/AuthModal.tsx";
 import { useCurrentUser } from "./lib/store.ts";
 import { auth } from "./lib/firebase";
@@ -33,6 +34,16 @@ import { initDbSync, seedOnceIfNeeded } from "./lib/db.ts";
 import { AlertTriangle } from "lucide-react";
 
 export default function App() {
+  // Standalone /docs route — full-page pitch deck + technical docs, rendered outside the app
+  // tab shell. Resolved before the main app mounts so it never flashes the loading/consent gates.
+  // A wrapper keeps the Rules of Hooks intact (no conditional hooks in AppMain).
+  if (typeof window !== "undefined" && window.location.pathname.replace(/\/$/, "") === "/docs") {
+    return <DocsPage />;
+  }
+  return <AppMain />;
+}
+
+function AppMain() {
   const [activeTab, setActiveTab] = useState("home");
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);

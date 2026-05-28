@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Activity, AlertTriangle, MapPin, Loader2, ChevronRight, ShieldAlert } from "lucide-react";
+import { Activity, AlertTriangle, MapPin, Loader2, ChevronRight, ShieldAlert, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
-import { runDiagnostic } from "../lib/diagnostic.ts";
+import { runDiagnostic, getDiagnosticCandidates, type DiagnosticCandidate } from "../lib/diagnostic.ts";
 import { usePatientProfile } from "../lib/profile.ts";
 import type { DiagnosticResult } from "../lib/types.ts";
 
@@ -11,30 +11,52 @@ interface DiagnosticPanelProps {
   onSetProfile?: () => void;
 }
 
-// The "analyzing → verdict" panel that matches the hackathon demo. Renders alongside the chat
-// reply. Fully offline; safe to mount whenever the user submits a symptom message.
+// The "analyzing → confirm → verdict" panel. Renders alongside the chat reply. Fully offline.
+//
+// Key design: we NEVER silently commit to the top keyword match. We surface the top 2-3 candidate
+// conditions and let the patient confirm the closest one — the patient is the authority on their
+// own symptoms. This fixes the "patient says X, system understands Y" mismatch. Only for clear
+// emergencies (safety classifier = critical) do we skip the confirm step and go straight to the
+// verdict.
 export function DiagnosticPanel({ symptoms, onSetProfile }: DiagnosticPanelProps) {
   const { t, lang } = useLanguage();
   const profile = usePatientProfile();
-  const [phase, setPhase] = useState<"analyzing" | "ready" | "error">("analyzing");
+  const [phase, setPhase] = useState<"analyzing" | "confirm" | "ready" | "dismissed" | "error">("analyzing");
   const [result, setResult] = useState<DiagnosticResult | null>(null);
+  const [candidates, setCandidates] = useState<DiagnosticCandidate[]>([]);
 
+  // Step 1 — fetch candidates. If it's a clear emergency, run the full verdict immediately.
   useEffect(() => {
     let mounted = true;
     setPhase("analyzing");
     setResult(null);
-    runDiagnostic({ symptoms, profile, lang: lang as "en" | "bn" })
-      .then((r) => {
+    setCandidates([]);
+    getDiagnosticCandidates(symptoms, lang as "en" | "bn")
+      .then((c) => {
         if (!mounted) return;
-        setResult(r);
-        setPhase("ready");
+        if (c.forceImmediate || c.candidates.length <= 1) {
+          // Emergency or only one plausible match → skip confirmation, go straight to verdict.
+          return runDiagnostic({ symptoms, profile, lang: lang as "en" | "bn" }).then((r) => {
+            if (!mounted) return;
+            setResult(r);
+            setPhase("ready");
+          });
+        }
+        // Ambiguous → ask the patient to confirm which condition is closest.
+        setCandidates(c.candidates);
+        setPhase("confirm");
       })
-      .catch(() => {
-        if (!mounted) return;
-        setPhase("error");
-      });
+      .catch(() => { if (mounted) setPhase("error"); });
     return () => { mounted = false; };
   }, [symptoms, profile.updatedAt, lang]);
+
+  // Step 2 — patient confirmed a condition → run the full diagnostic locked to it.
+  const confirmCandidate = (entryId: string) => {
+    setPhase("analyzing");
+    runDiagnostic({ symptoms, profile, lang: lang as "en" | "bn", forcedEntryId: entryId })
+      .then((r) => { setResult(r); setPhase("ready"); })
+      .catch(() => setPhase("error"));
+  };
 
   if (phase === "error") return null;
 
@@ -68,6 +90,74 @@ export function DiagnosticPanel({ symptoms, onSetProfile }: DiagnosticPanelProps
             <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-bold text-emerald-300 uppercase tracking-widest">
               <Loader2 size={12} className="animate-spin" /> {t("diag.running")}
             </div>
+          </motion.div>
+        )}
+
+        {phase === "confirm" && (
+          <motion.div
+            key="confirm"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="bg-emerald-950 text-white rounded-3xl p-5 shadow-xl"
+          >
+            <header className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-emerald-800/60 rounded-xl flex items-center justify-center">
+                <HelpCircle size={20} className="text-emerald-300" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">
+                  {lang === "bn" ? "কোনটি আপনার সমস্যার সবচেয়ে কাছাকাছি?" : "Which is closest to your problem?"}
+                </p>
+                <p className="text-[10px] text-emerald-300/80">
+                  {lang === "bn" ? "সঠিক পরামর্শের জন্য নিশ্চিত করুন" : "Confirm so we advise you correctly"}
+                </p>
+              </div>
+            </header>
+
+            <div className="space-y-2 mt-3">
+              {candidates.map((c) => {
+                const sevTone =
+                  c.severity === "critical" ? "border-red-400/40 bg-red-500/10"
+                  : c.severity === "urgent" ? "border-amber-400/40 bg-amber-500/10"
+                  : "border-emerald-400/30 bg-emerald-500/10";
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => confirmCandidate(c.id)}
+                    className={`w-full text-left border ${sevTone} rounded-xl px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/10 transition-colors`}
+                  >
+                    <span className="text-sm font-medium text-white">{lang === "bn" ? c.title_bn : c.title_en}</span>
+                    <ChevronRight size={16} className="text-white/50 shrink-0" />
+                  </button>
+                );
+              })}
+              {/* "None of these" — never force a wrong pick. Dismiss and ask the patient to add
+                  detail in the chat so the AI can re-assess. */}
+              <button
+                onClick={() => setPhase("dismissed")}
+                className="w-full text-left border border-white/10 rounded-xl px-4 py-3 text-xs text-emerald-300/80 hover:bg-white/5 transition-colors"
+              >
+                {lang === "bn" ? "কোনোটিই না / আরও বর্ণনা করব →" : "None of these / describe more →"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {phase === "dismissed" && (
+          <motion.div
+            key="dismissed"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-start gap-3"
+          >
+            <HelpCircle size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-emerald-900 leading-relaxed">
+              {lang === "bn"
+                ? "ঠিক আছে। আপনার সমস্যাটি আরও একটু বিস্তারিত লিখুন — কত দিন ধরে, কোথায়, আর কোনো লক্ষণ আছে কিনা। আমি আবার দেখে পরামর্শ দেব।"
+                : "No problem. Please describe your symptoms in a bit more detail in the chat — how long, where, and any other signs. I'll reassess and advise you."}
+            </p>
           </motion.div>
         )}
 
