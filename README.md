@@ -1,12 +1,13 @@
-# ShasthyoAI — স্বাস্থ্য সহায়ক
+# CareAid AI — স্বাস্থ্য সহায়ক
 
 > **AI-powered bilingual health companion for rural Bangladesh**
 > Offline-first · Voice-enabled · DGHS-compliant · MCP-ready
 
 Built for **The Infinity AI BuildFest 2026** by **Team MindMatrix**
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-emerald)](https://shasthyoai.onrender.com)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-CareAid%20AI-emerald)](https://careaid-ai.onrender.com)
 [![MCP Server](https://img.shields.io/badge/MCP-Clinical%20Tools-blue)](./mcp-server.ts)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green)](./LICENSE)
 
 ---
 
@@ -25,7 +26,7 @@ When a mother's infant has a 103°F fever at midnight, she needs guidance in 10 
 
 ## Our Solution
 
-ShasthyoAI is a **voice-first, Bangla/English AI health companion** that works even without internet. It combines cloud AI quality with complete offline fallback — so rural patients always get a response, even with zero signal.
+CareAid AI is a **voice-first, Bangla/English AI health companion** that works even without internet. It combines cloud AI quality with complete offline fallback — so rural patients always get a response, even with zero signal.
 
 | Module | What it does |
 |---|---|
@@ -102,7 +103,7 @@ Upload Image
 
 ## MCP Server — Clinical Tools for AI Agents
 
-ShasthyoAI exposes its full clinical intelligence as an MCP server, allowing Claude Desktop, Cursor, n8n, and any MCP-compatible agent to call vetted medical tools directly.
+CareAid AI exposes its full clinical intelligence as an MCP server, allowing Claude Desktop, Cursor, n8n, and any MCP-compatible agent to call vetted medical tools directly.
 
 ```bash
 # Run MCP server (Streamable HTTP)
@@ -127,8 +128,8 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "shasthyoai": {
-      "url": "https://shasthyoai.onrender.com/mcp",
+    "careaid-ai": {
+      "url": "https://careaid-ai.onrender.com/mcp",
       "transport": "streamable-http"
     }
   }
@@ -324,7 +325,7 @@ certifications/* → readable by all, writable by verified MBBS doctors
 
 ## n8n Webhook Integration
 
-ShasthyoAI fires structured JSON webhooks compatible with n8n, Zapier, or any automation platform:
+CareAid AI fires structured JSON webhooks compatible with n8n, Zapier, or any automation platform:
 
 **`POST /api/webhooks/prescription-scanned`**
 ```json
@@ -362,4 +363,4 @@ Apache 2.0 — see [LICENSE](./LICENSE)
 
 ---
 
-> ⚠️ ShasthyoAI provides AI-assisted health guidance only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a licensed doctor for medical decisions.
+> ⚠️ CareAid AI provides AI-assisted health guidance only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a licensed doctor for medical decisions.
