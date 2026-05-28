@@ -107,8 +107,8 @@ export function DocsPage() {
             {navOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <div className="flex items-center gap-2 font-black text-lg">
-            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">S</div>
-            ShasthyoAI <span className="text-emerald-400 font-medium hidden sm:inline">/ docs</span>
+            <img src="/icons/CareAid-Aid-logo.png" alt="CareAid AI" className="w-8 h-8 rounded-lg object-cover bg-white" />
+            CareAid AI <span className="text-emerald-400 font-medium hidden sm:inline">/ docs</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <div className="relative hidden sm:block">
@@ -164,7 +164,7 @@ export function DocsPage() {
           </Section>
 
           <Section id="solution" kicker="02 · Solution" title="A triage nurse in every pocket — that works offline">
-            <p>ShasthyoAI is a fully offline-capable AI health companion. It gives <strong>clinical triage, prescription scanning, and first-aid guidance in Bangla</strong>, on low-end phones, without requiring internet.</p>
+            <p>CareAid AI is a fully offline-capable AI health companion. It gives <strong>clinical triage, prescription scanning, and first-aid guidance in Bangla</strong>, on low-end phones, without requiring internet.</p>
             <p>The core insight: we don't try to <em>diagnose diseases</em> (the hardest, most dangerous AI task). We <strong>triage to a safe action</strong> and <strong>confirm with the patient</strong> instead of guessing — built on 82 clinician-authored protocols that run in &lt;5 ms on any device.</p>
             <FeatureGrid />
           </Section>
@@ -230,7 +230,7 @@ export function DocsPage() {
 
           <Section id="vision" kicker="12 · Vision" title="Healthcare shouldn't require a connection">
             <p className="text-xl font-medium text-emerald-900 leading-relaxed">
-              Our vision is a world where a mother in a flooded village at 2 AM gets the same safe, trustworthy first guidance as someone in a city hospital — in her own language, on the phone already in her hand, whether or not there's signal. <strong>ShasthyoAI puts a nurse protocol in every pocket.</strong>
+              Our vision is a world where a mother in a flooded village at 2 AM gets the same safe, trustworthy first guidance as someone in a city hospital — in her own language, on the phone already in her hand, whether or not there's signal. <strong>CareAid AI puts a nurse protocol in every pocket.</strong>
             </p>
           </Section>
 
@@ -285,7 +285,7 @@ export function DocsPage() {
           </Section>
 
           <footer className="pt-10 border-t border-gray-100 text-sm text-gray-400">
-            ShasthyoAI — স্বাস্থ্য সহায়ক · The Infinity AI BuildFest 2026 · This documentation is live and reflects real system state.
+            CareAid AI — স্বাস্থ্য সহায়ক · The Infinity AI BuildFest 2026 · This documentation is live and reflects real system state.
           </footer>
         </main>
       </div>
@@ -305,7 +305,7 @@ export function DocsPage() {
               const res = await m.publishDocsConfig(c as unknown as Record<string, unknown>);
               setPublishMsg(res.ok
                 ? "✓ Published globally — all visitors now see this."
-                : `Saved on this device only. To publish to everyone, sign in to ShasthyoAI first. (${res.error})`);
+                : `Saved on this device only. To publish to everyone, sign in to CareAid AI first. (${res.error})`);
             } catch (e: any) {
               setPublishMsg("Saved locally. Global publish unavailable: " + (e?.message || e));
             }
@@ -336,7 +336,7 @@ function NotAvailable({ reason, startISO, endISO }: { reason: string; startISO: 
           <Calendar size={16} />
           Public window: {fmtDate(startISO)} → {fmtDate(endISO)}
         </div>
-        <p className="text-[11px] text-emerald-400/50">HTTP 403 · ShasthyoAI /docs</p>
+        <p className="text-[11px] text-emerald-400/50">HTTP 403 · CareAid AI /docs</p>
       </div>
     </div>
   );
@@ -444,7 +444,7 @@ function AdminPanel({ config, publishMsg, onClose, onSave, onLock }: {
             </button>
             <button onClick={onLock} className="px-4 rounded-xl border border-gray-200 text-gray-600 text-sm font-bold hover:bg-gray-50">Lock admin</button>
           </div>
-          <p className="text-[11px] text-gray-400 text-center">Publishing globally requires you to be signed in to ShasthyoAI (Firestore write rule).</p>
+          <p className="text-[11px] text-gray-400 text-center">Publishing globally requires you to be signed in to CareAid AI (Firestore write rule).</p>
         </div>
       </div>
     </div>
@@ -456,7 +456,7 @@ function Hero({ stats }: { stats: LiveStats | null }) {
   return (
     <div className="text-center space-y-4 pt-4">
       <span className="inline-block text-[11px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">The Infinity AI BuildFest 2026</span>
-      <h1 className="text-4xl sm:text-5xl font-black tracking-tight">ShasthyoAI <span className="text-emerald-600">/ স্বাস্থ্য সহায়ক</span></h1>
+      <h1 className="text-4xl sm:text-5xl font-black tracking-tight">CareAid AI <span className="text-emerald-600">/ স্বাস্থ্য সহায়ক</span></h1>
       <p className="text-lg text-gray-500 max-w-2xl mx-auto">An offline-first AI telehealth companion bringing safe clinical triage to rural Bangladesh — in Bangla, on any phone, with or without internet.</p>
       <div className="flex flex-wrap justify-center gap-2 pt-2">
         {["Offline-first PWA", "Bilingual (BN + EN)", "On-device AI", "MBBS-audited", `${stats?.kb_entries ?? 82} clinical protocols`].map((b) => (
@@ -545,17 +545,17 @@ function LiveStatsCards({ stats }: { stats: LiveStats | null }) {
 
 function CompareTable() {
   const rows = [
-    ["Works fully offline", "ShasthyoAI", true, "Typical telehealth", false],
-    ["Bangla voice input", "ShasthyoAI", true, "Typical telehealth", false],
-    ["Runs on 2GB Android", "ShasthyoAI", true, "Typical telehealth", false],
-    ["Clinician-authored, no hallucination", "ShasthyoAI", true, "Generic chatbots", false],
-    ["Confirms with patient, doesn't guess", "ShasthyoAI", true, "Diagnostic AI", false],
+    ["Works fully offline", "CareAid AI", true, "Typical telehealth", false],
+    ["Bangla voice input", "CareAid AI", true, "Typical telehealth", false],
+    ["Runs on 2GB Android", "CareAid AI", true, "Typical telehealth", false],
+    ["Clinician-authored, no hallucination", "CareAid AI", true, "Generic chatbots", false],
+    ["Confirms with patient, doesn't guess", "CareAid AI", true, "Diagnostic AI", false],
   ];
   return (
     <div className="not-prose overflow-x-auto">
       <table className="w-full text-sm border border-gray-100 rounded-xl overflow-hidden">
         <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-          <tr><th className="text-left px-4 py-2 font-bold">Capability</th><th className="px-4 py-2 font-bold text-emerald-700">ShasthyoAI</th><th className="px-4 py-2 font-bold">Others</th></tr>
+          <tr><th className="text-left px-4 py-2 font-bold">Capability</th><th className="px-4 py-2 font-bold text-emerald-700">CareAid AI</th><th className="px-4 py-2 font-bold">Others</th></tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (

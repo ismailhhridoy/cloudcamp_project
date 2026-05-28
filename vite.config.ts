@@ -19,10 +19,10 @@ export default defineConfig(({mode}) => {
         injectRegister: 'auto',
         // No service worker in dev — keeps `npx vite` free of stale-cache confusion while building.
         devOptions: {enabled: false},
-        includeAssets: ['icons/icon.svg', 'model-manifest.json'],
+        includeAssets: ['icons/CareAid-Aid-logo.png', 'model-manifest.json'],
         manifest: {
-          name: 'ShasthyoAI — স্বাস্থ্য সহায়ক',
-          short_name: 'ShasthyoAI',
+          name: 'CareAid AI — স্বাস্থ্য সহায়ক',
+          short_name: 'CareAid AI',
           description: 'AI-powered Bangla health companion. Works offline once installed.',
           theme_color: '#065f46',
           background_color: '#ffffff',
@@ -30,8 +30,8 @@ export default defineConfig(({mode}) => {
           start_url: '/',
           lang: 'bn',
           icons: [
-            {src: '/icons/icon.svg', sizes: '192x192', type: 'image/svg+xml'},
-            {src: '/icons/icon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable'},
+            {src: '/icons/CareAid-Aid-logo.png', sizes: '192x192', type: 'image/png'},
+            {src: '/icons/CareAid-Aid-logo.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable'},
           ],
         },
         workbox: {

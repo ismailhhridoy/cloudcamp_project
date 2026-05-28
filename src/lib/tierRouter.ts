@@ -43,7 +43,7 @@ function pickLang(text: string, current: "en" | "bn"): "en" | "bn" {
 }
 
 function buildSystemFromRag(snippet: string, lang: "en" | "bn"): string {
-  const base = `You are ShasthyoAI, a calm Bangla/English health-TRIAGE nurse for rural Bangladesh.
+  const base = `You are CareAid AI, a calm Bangla/English health-TRIAGE nurse for rural Bangladesh.
 You are NOT a doctor and you do NOT diagnose diseases. Your job is to assess URGENCY and recommend
 an ACTION. Follow BMDC and DGHS Telemedicine Guideline 2020 rules:
 1. Reply ONLY in ${lang === "bn" ? "Bangla" : "English"}.
