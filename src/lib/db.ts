@@ -288,6 +288,49 @@ export function writeExternalDoctor(d: ExternalDoctor): void {
   safeWrite(() => setDoc(doc(getDb(), "doctors", d.bmdc), clean(d) as DocumentData, { merge: true }), "externalDoctor");
 }
 
+// ── /docs config (shared, global) ────────────────────────────────────────────
+// Stored at appState/docs — public read, signed-in write (existing firestore.rules). This makes
+// the admin's visibility/schedule changes propagate to EVERY visitor in real time, instead of
+// being stuck in one browser's localStorage.
+export async function fetchDocsConfigOnce(): Promise<Record<string, unknown> | null> {
+  if (!CONNECTED()) return null;
+  try {
+    const snap = await getDoc(doc(getDb(), "appState", "docs"));
+    return snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+  } catch (e) {
+    console.warn("[db] fetchDocsConfigOnce failed", e);
+    return null;
+  }
+}
+
+export function subscribeDocsConfig(onChange: (cfg: Record<string, unknown>) => void): () => void {
+  if (!CONNECTED()) return () => {};
+  try {
+    return onSnapshot(
+      doc(getDb(), "appState", "docs"),
+      (snap) => { if (snap.exists()) onChange(snap.data() as Record<string, unknown>); },
+      (e) => console.warn("[db] docsConfig listener", e),
+    );
+  } catch (e) {
+    console.warn("[db] subscribeDocsConfig failed", e);
+    return () => {};
+  }
+}
+
+// Publish the config globally. Requires Firebase sign-in (appState write rule). Returns whether
+// the write was accepted so the admin UI can show success / "sign in to publish" feedback.
+export async function publishDocsConfig(cfg: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  if (!CONNECTED()) return { ok: false, error: "Firebase not configured" };
+  try {
+    await setDoc(doc(getDb(), "appState", "docs"), clean(cfg) as DocumentData, { merge: true });
+    return { ok: true };
+  } catch (e: any) {
+    const msg = e?.code || e?.message || String(e);
+    console.error("[db] publishDocsConfig failed", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export function writeLegibility(rec: LegibilityRecord): void {
   safeWrite(() => setDoc(doc(getDb(), "legibilityScores", rec.bmdc), clean(rec) as DocumentData, { merge: true }), "legibility");
 }

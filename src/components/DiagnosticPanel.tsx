@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, AlertTriangle, MapPin, Loader2, ChevronRight, ShieldAlert, HelpCircle } from "lucide-react";
+import { Activity, AlertTriangle, MapPin, Loader2, ChevronRight, ShieldAlert, HelpCircle, Phone } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { runDiagnostic, getDiagnosticCandidates, type DiagnosticCandidate } from "../lib/diagnostic.ts";
@@ -302,10 +302,9 @@ function RiskVerdictCard({
             {t("diag.nearestHospitals")}
           </p>
           {result.nearestHospitals.map((nh) => (
-            <a
+            <div
               key={nh.hospital.id}
-              href={nh.hospital.phone ? `tel:${nh.hospital.phone}` : undefined}
-              className="block bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-3 hover:border-emerald-300 transition-colors"
+              className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-3"
             >
               <div className="w-10 h-10 bg-white border border-gray-100 rounded-xl flex items-center justify-center text-gray-500 shrink-0">
                 <MapPin size={18} />
@@ -323,9 +322,30 @@ function RiskVerdictCard({
                     <span className="opacity-60"> · {nh.source === "district" ? (lang === "bn" ? "জেলা অনুমান" : "by district") : (lang === "bn" ? "আনুমানিক" : "approx.")}</span>
                   )}
                 </p>
+                {/* Visible contact number — tappable to dial. */}
+                {nh.hospital.phone ? (
+                  <a
+                    href={`tel:${nh.hospital.phone}`}
+                    className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800"
+                  >
+                    <Phone size={12} /> {nh.hospital.phone}
+                  </a>
+                ) : (
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {lang === "bn" ? "ফোন নম্বর নেই · জরুরি হলে ৯৯৯" : "No phone listed · call 999 for emergencies"}
+                  </p>
+                )}
               </div>
-              <ChevronRight size={16} className="text-gray-300" />
-            </a>
+              {nh.hospital.phone && (
+                <a
+                  href={`tel:${nh.hospital.phone}`}
+                  className="shrink-0 inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg px-3 py-2"
+                  aria-label={lang === "bn" ? "কল করুন" : "Call"}
+                >
+                  <Phone size={14} /> {lang === "bn" ? "কল" : "Call"}
+                </a>
+              )}
+            </div>
           ))}
         </div>
       )}
