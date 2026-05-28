@@ -19,7 +19,7 @@ export function TopBar({ onLoginClick }: TopBarProps) {
   <img
     src="/icons/CareAid-Ai-Logo.png"
     alt="CareAid AI"
-    className="h-8 w-auto object-contain"
+    className="h-12 w-auto object-contain"
   />
   
 </div>
