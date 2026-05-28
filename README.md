@@ -7,7 +7,6 @@ Built for **The Infinity AI BuildFest 2026** by **Team MindMatrix**
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-emerald)](https://shasthyoai.onrender.com)
 [![MCP Server](https://img.shields.io/badge/MCP-Clinical%20Tools-blue)](./mcp-server.ts)
-[![License](https://img.shields.io/badge/License-Apache%202.0-green)](./LICENSE)
 
 ---
 
