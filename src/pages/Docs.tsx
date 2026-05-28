@@ -58,12 +58,28 @@ export function DocsPage() {
   const [query, setQuery] = useState("");
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
+  const [publishMsg, setPublishMsg] = useState<string | null>(null);
+
   useEffect(() => {
     setAdmin(maybeUnlockAdmin());
     fetch("/api/webhooks/daily-summary")
       .then((r) => r.json())
       .then((d) => setStats(d.system))
       .catch(() => {});
+
+    // Subscribe to the GLOBAL config in Firestore so the admin's published schedule reaches every
+    // visitor in real time. Falls back silently to the localStorage default if Firestore is down.
+    let unsub = () => {};
+    import("../lib/db.ts")
+      .then((m) => {
+        unsub = m.subscribeDocsConfig((remote) => {
+          // Merge the remote doc over our defaults and cache locally for instant next load.
+          const merged = saveDocsConfig(remote as Partial<DocsConfig>);
+          setConfig(merged);
+        });
+      })
+      .catch(() => {});
+    return () => { try { unsub(); } catch { /* ignore */ } };
   }, []);
 
   const vis = useMemo(() => getVisibility(config, admin), [config, admin]);
@@ -278,8 +294,22 @@ export function DocsPage() {
       {admin && showAdminPanel && (
         <AdminPanel
           config={config}
-          onClose={() => setShowAdminPanel(false)}
-          onSave={(c) => { setConfig(saveDocsConfig(c)); }}
+          publishMsg={publishMsg}
+          onClose={() => { setShowAdminPanel(false); setPublishMsg(null); }}
+          onSave={async (c) => {
+            // Save locally for instant feedback, then publish globally to Firestore.
+            setConfig(saveDocsConfig(c));
+            setPublishMsg("Publishing…");
+            try {
+              const m = await import("../lib/db.ts");
+              const res = await m.publishDocsConfig(c as unknown as Record<string, unknown>);
+              setPublishMsg(res.ok
+                ? "✓ Published globally — all visitors now see this."
+                : `Saved on this device only. To publish to everyone, sign in to ShasthyoAI first. (${res.error})`);
+            } catch (e: any) {
+              setPublishMsg("Saved locally. Global publish unavailable: " + (e?.message || e));
+            }
+          }}
           onLock={() => { lockAdmin(); setAdmin(false); setShowAdminPanel(false); }}
         />
       )}
@@ -313,8 +343,8 @@ function NotAvailable({ reason, startISO, endISO }: { reason: string; startISO: 
 }
 
 // ── Admin panel ──────────────────────────────────────────────────────────────
-function AdminPanel({ config, onClose, onSave, onLock }: {
-  config: DocsConfig; onClose: () => void; onSave: (c: DocsConfig) => void; onLock: () => void;
+function AdminPanel({ config, publishMsg, onClose, onSave, onLock }: {
+  config: DocsConfig; publishMsg: string | null; onClose: () => void; onSave: (c: DocsConfig) => void; onLock: () => void;
 }) {
   const [draft, setDraft] = useState<DocsConfig>(config);
   const set = (patch: Partial<DocsConfig>) => setDraft((d) => ({ ...d, ...patch }));
@@ -402,12 +432,19 @@ function AdminPanel({ config, onClose, onSave, onLock }: {
             ))}
           </section>
 
+          {publishMsg && (
+            <div className={`text-xs rounded-lg px-3 py-2 ${publishMsg.startsWith("✓") ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+              {publishMsg}
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
-            <button onClick={() => { onSave(draft); onClose(); }} className="flex-1 bg-emerald-600 text-white rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-500">
-              <Save size={16} /> Save & Publish
+            <button onClick={() => onSave(draft)} className="flex-1 bg-emerald-600 text-white rounded-xl py-3 font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-500">
+              <Save size={16} /> Save & Publish to everyone
             </button>
             <button onClick={onLock} className="px-4 rounded-xl border border-gray-200 text-gray-600 text-sm font-bold hover:bg-gray-50">Lock admin</button>
           </div>
+          <p className="text-[11px] text-gray-400 text-center">Publishing globally requires you to be signed in to ShasthyoAI (Firestore write rule).</p>
         </div>
       </div>
     </div>

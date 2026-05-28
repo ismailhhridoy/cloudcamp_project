@@ -10,7 +10,10 @@
 // Persistence: localStorage (instant, offline-friendly). Mirrored to Firestore `appState/docs`
 // when signed in so the schedule survives across devices/judges.
 
-const CONFIG_KEY = "shasthyo_docs_config_v1";
+// Bump this key whenever the default window changes — it forces every browser (including the
+// live Render site) to drop any stale saved config and pick up the new default. Critical because
+// the config lives in per-browser localStorage and does NOT propagate between visitors.
+const CONFIG_KEY = "shasthyo_docs_config_v2";
 const ADMIN_KEY = "shasthyo_docs_admin_v1";
 // Shared admin unlock secret — visit /docs?admin=<this> once to unlock the admin panel on a
 // device. Hackathon-grade gating (not a real auth boundary).
@@ -34,9 +37,12 @@ export interface DocsConfig {
   updatedAt: string;
 }
 
-// Default judging window — June 10 00:00 → June 14 23:59, 2026 (local time).
-const DEFAULT_START = new Date(2026, 5, 10, 0, 0, 0).toISOString();   // month is 0-indexed → 5 = June
-const DEFAULT_END = new Date(2026, 5, 14, 23, 59, 59).toISOString();
+// Default public window. Opens NOW (well before judging) and runs through the end of June so the
+// site is publicly live immediately for everyone — not just the admin's own browser. The strict
+// judging window (June 10 → June 14) can be set anytime from the admin panel; this default just
+// makes sure /docs isn't dark for visitors before then.
+const DEFAULT_START = new Date(2026, 4, 1, 0, 0, 0).toISOString();    // May 1 2026 (month 4 = May)
+const DEFAULT_END = new Date(2026, 5, 30, 23, 59, 59).toISOString();  // June 30 2026 23:59
 
 export const DEFAULT_CONFIG: DocsConfig = {
   enabled: true,

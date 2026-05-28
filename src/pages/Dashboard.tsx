@@ -73,7 +73,7 @@ export function DashboardPage() {
           <button onClick={() => setActiveView("doctors")}
             className={cn("flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
               activeView === "doctors" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-500")}>
-            {lang === "bn" ? "ডাক্তার মান" : "Doctor Quality"}
+            {lang === "bn" ? "হাতের লেখার মান" : "Handwriting Quality"}
           </button>
         </div>
       </div>
@@ -160,7 +160,7 @@ export function DashboardPage() {
           </>
         ) : (
           <>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{lang === "bn" ? "জেলা অনুযায়ী ডাক্তারের মান" : "Doctor Quality by District"}</p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{lang === "bn" ? "জেলা অনুযায়ী হাতের লেখার মান" : "Doctors' Handwriting Quality by District"}</p>
             <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
               <p className="text-xs font-bold text-blue-800">{lang === "bn" ? "প্রশিক্ষণের সুপারিশ" : "Training Recommendation"}</p>
               <p className="text-xs text-blue-700 mt-1">{lang === "bn" ? "রাজশাহী ও সিলেটে প্রেসক্রিপশনের মান উন্নয়নের জন্য প্রশিক্ষণ প্রয়োজন।" : "Rajshahi and Sylhet need prescription legibility training based on patient reports."}</p>
