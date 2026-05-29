@@ -107,7 +107,7 @@ export function DocsPage() {
             {navOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <div className="flex items-center gap-2 font-black text-lg">
-            <img src="/icons/CareAid-Aid-logo.png" alt="CareAid AI" className="w-8 h-8 rounded-lg object-cover bg-white" />
+            <img src="/icons/Favicon.png" alt="CareAid AI" className="w-8 h-8 rounded-lg object-contain bg-white" />
             CareAid AI <span className="text-emerald-400 font-medium hidden sm:inline">/ docs</span>
           </div>
           <div className="ml-auto flex items-center gap-2">

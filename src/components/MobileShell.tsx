@@ -18,7 +18,7 @@ export function MobileShell({ children, activeTab, setActiveTab }: MobileShellPr
         {/* Header — z-50 so nothing overlaps it */}
         <header className="p-4 border-b border-gray-100 bg-white sticky top-0 z-50 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <img src="/icons/CareAid-Aid-logo.png" alt="CareAid AI" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+            <img src="/icons/Favicon.png" alt="CareAid AI" className="w-8 h-8 rounded-lg object-contain shrink-0" />
             <h1 className="text-xl font-bold text-emerald-900">CareAid AI</h1>
           </div>
           <div className="flex items-center gap-3">

@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Wifi,
   WifiOff,
-  Cloud,
   ShieldCheck,
   Layers,
 } from "lucide-react";
@@ -34,6 +33,7 @@ import { useFontScale, type FontScale } from "../lib/fontSize.ts";
 import { Type as TypeIcon } from "lucide-react";
 import { useOnlineStatus } from "../lib/connectivity.ts";
 import { detectCapabilities, describeTier, type DeviceCapabilities } from "../lib/capabilities.ts";
+import { OfflineAiCard } from "../components/OfflineAiCard.tsx";
 
 export function SettingsPage() {
   const { t, lang } = useLanguage();
@@ -83,8 +83,8 @@ export function SettingsPage() {
       {/* Font size — keep this near the top so low-vision users can find it fast. */}
       <FontSizeSection />
 
-      {/* Beginner-friendly offline AI panel — plain language, one big tap. */}
-      <SimpleOfflineSection tf={tf} handleLoadTf={handleLoadTf} />
+      {/* Beginner-friendly offline AI panel — plain language, one big tap. Shared with Homepage. */}
+      <OfflineAiCard />
 
       {/* Device capability card */}
       {caps && (
@@ -337,74 +337,6 @@ function StatusCard({
         <p className="text-sm font-bold text-gray-900">{value}</p>
       </div>
     </div>
-  );
-}
-
-function SimpleOfflineSection({ tf, handleLoadTf }: any) {
-  const { t } = useLanguage();
-  const ready = tf.status === "ready";
-  const loading = tf.status === "loading";
-  const progress = loading ? tf.progress : 0;
-  const progressText = loading ? tf.progressText : "";
-  const onTap = () => handleLoadTf();
-
-  return (
-    <section className="bg-gradient-to-br from-emerald-900 to-emerald-700 rounded-3xl p-5 sm:p-6 text-white shadow-lg">
-      <div className="flex items-start gap-3 mb-4">
-        <div className="w-12 h-12 bg-white/15 backdrop-blur rounded-2xl flex items-center justify-center text-white shrink-0">
-          <Cloud size={24} />
-        </div>
-        <div>
-          <h2 className="text-lg font-black">{t("settings.simple.title")}</h2>
-          <p className="text-xs text-emerald-100/80 mt-0.5 leading-relaxed">{t("settings.simple.intro")}</p>
-        </div>
-      </div>
-
-      {/* Step-by-step explainer */}
-      <ol className="space-y-2 mb-5">
-        <SimpleStep n="1" en={t("settings.simple.step1")} />
-        <SimpleStep n="2" en={t("settings.simple.step2")} />
-        <SimpleStep n="3" en={t("settings.simple.step3")} />
-      </ol>
-
-      {ready ? (
-        <div className="bg-emerald-500/20 border border-emerald-300/40 rounded-2xl p-4 flex items-start gap-3">
-          <CheckCircle2 size={22} className="text-emerald-200 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold">{t("settings.simple.ready")}</p>
-            <p className="text-xs text-emerald-100/80 mt-1 leading-relaxed">{t("settings.simple.ready.body")}</p>
-          </div>
-        </div>
-      ) : loading ? (
-        <div className="space-y-2">
-          <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden">
-            <motion.div className="h-3 bg-emerald-300" animate={{ width: `${Math.round((progress || 0) * 100)}%` }} />
-          </div>
-          <p className="text-xs text-emerald-100/80">{progressText || t("settings.localai.downloading")} · {Math.round((progress || 0) * 100)}%</p>
-          <p className="text-[11px] text-emerald-100/70 italic leading-relaxed mt-2">{t("settings.simple.downloading.note")}</p>
-        </div>
-      ) : (
-        <>
-          <button
-            onClick={onTap}
-            className="w-full bg-white text-emerald-700 py-4 rounded-2xl text-base font-black flex items-center justify-center gap-2 hover:bg-emerald-50 transition-colors"
-          >
-            <Download size={20} />
-            {t("settings.simple.cta")}
-          </button>
-          <p className="text-[11px] text-emerald-100/70 mt-2 text-center leading-relaxed">{t("settings.simple.hint")}</p>
-        </>
-      )}
-    </section>
-  );
-}
-
-function SimpleStep({ n, en }: { n: string; en: string }) {
-  return (
-    <li className="flex items-start gap-3 text-sm">
-      <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center text-xs font-black shrink-0">{n}</span>
-      <span className="text-emerald-50/90 leading-relaxed">{en}</span>
-    </li>
   );
 }
 

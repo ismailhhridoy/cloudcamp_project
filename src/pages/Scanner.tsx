@@ -566,35 +566,56 @@ export function ScannerPage({ onLoginRequired, user }: { onLoginRequired: () => 
               </div>
             )}
 
-            {/* Free / low-cost test locations matched to the recommended tests */}
-            {freeTestMatches.length > 0 && (
+            {/* Free / low-cost test locations matched to the recommended tests. Always shown when
+                the prescription has tests — falls back to a government-facility pointer when no
+                seeded provider matches the patient's district, so the patient is never left
+                without guidance on where to get tests affordably. */}
+            {Array.isArray(result.tests) && result.tests.length > 0 && (
               <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 shadow-sm">
                 <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                   <MapPin size={12} /> {lang === "bn" ? "বিনামূল্যে / কম খরচে পরীক্ষা" : "Free / low-cost test locations"}
                 </p>
-                <div className="space-y-3">
-                  {freeTestMatches.map((m, i) => (
-                    <div key={i} className="bg-white border border-blue-100 rounded-xl p-3">
-                      <p className="text-xs font-bold text-blue-800 mb-1.5">{m.test}</p>
-                      <div className="space-y-1.5">
-                        {m.providers.slice(0, 3).map((p) => (
-                          <div key={p.id} className="text-[12px] text-gray-700">
-                            <p className="font-bold text-gray-900">{lang === "bn" ? p.name_bn : p.name_en}</p>
-                            <p className="text-[11px] text-gray-500 leading-snug">{lang === "bn" ? p.note_bn : p.note_en}</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                              <span className="inline-flex items-center gap-1"><Clock size={10} />{lang === "bn" ? p.hours_bn : p.hours_en}</span>
-                              {p.phone && (
-                                <a href={`tel:${p.phone}`} className="inline-flex items-center gap-1 text-blue-700 font-bold">
-                                  ☎ {p.phone}
-                                </a>
-                              )}
-                            </p>
-                          </div>
-                        ))}
+
+                {freeTestMatches.length > 0 ? (
+                  <div className="space-y-3">
+                    {freeTestMatches.map((m, i) => (
+                      <div key={i} className="bg-white border border-blue-100 rounded-xl p-3">
+                        <p className="text-xs font-bold text-blue-800 mb-1.5">{m.test}</p>
+                        <div className="space-y-1.5">
+                          {m.providers.slice(0, 3).map((p) => (
+                            <div key={p.id} className="text-[12px] text-gray-700">
+                              <p className="font-bold text-gray-900">{lang === "bn" ? p.name_bn : p.name_en}</p>
+                              <p className="text-[11px] text-gray-500 leading-snug">{lang === "bn" ? p.note_bn : p.note_en}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                                <span className="inline-flex items-center gap-1"><Clock size={10} />{lang === "bn" ? p.hours_bn : p.hours_en}</span>
+                                {p.phone && (
+                                  <a href={`tel:${p.phone}`} className="inline-flex items-center gap-1 text-blue-700 font-bold">
+                                    ☎ {p.phone}
+                                  </a>
+                                )}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  // Fallback — no seeded provider matched, but these tests are still routinely free
+                  // or low-cost at the nearest government facility.
+                  <div className="bg-white border border-blue-100 rounded-xl p-3 text-[12px] text-gray-700 space-y-1.5">
+                    <p className="font-bold text-gray-900">
+                      {lang === "bn" ? "নিকটস্থ সরকারি স্বাস্থ্যকেন্দ্র" : "Your nearest government health facility"}
+                    </p>
+                    <p className="text-[11px] text-gray-500 leading-snug">
+                      {lang === "bn"
+                        ? "এই পরীক্ষাগুলো সাধারণত উপজেলা স্বাস্থ্য কমপ্লেক্স বা জেলা সদর হাসপাতালে বিনামূল্যে বা খুব কম খরচে করা যায়। সরকারি অ্যাম্বুলেন্স/তথ্যের জন্য ৯৯৯ অথবা স্বাস্থ্য বাতায়ন ১৬২৬৩-এ কল করুন।"
+                        : "These tests are usually available free or at very low cost at your Upazila Health Complex or District Sadar Hospital. For directions or info, call 999, or the national health line Shastho Batayon at 16263."}
+                    </p>
+                    <a href="tel:16263" className="inline-flex items-center gap-1 text-blue-700 font-bold text-[11px]">☎ 16263 · {lang === "bn" ? "স্বাস্থ্য বাতায়ন" : "Shastho Batayon"}</a>
+                  </div>
+                )}
+
                 <p className="text-[10px] text-blue-700/60 mt-3 italic leading-relaxed">
                   {lang === "bn"
                     ? "যাওয়ার আগে স্থানীয় শাখার সাথে যোগাযোগ করে নিশ্চিত করুন। বিনামূল্যে সেবা সাধারণত সরকারি NID প্রয়োজন।"

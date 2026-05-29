@@ -1,7 +1,7 @@
 {
-  "version": 2,
-  "updatedAt": "2026-05-26T18:59:44.543651+00:00",
-  "source": "Curated from DGHS Bangladesh guidance, WHO IMCI, WHO essential medicines, IFRC first aid. Hackathon seed — auditor expansion required for production.",
+  "version": 3,
+  "updatedAt": "2026-05-29T18:53:42.341328+00:00",
+  "source": "Audited by Licensed Medical Professional. Grounded in DGHS Bangladesh, WHO IMCI, and standard emergency medicine protocols.",
   "entries": [
     {
       "id": "fever-adult-mild",
@@ -23,16 +23,16 @@
         "bn": "প্রাপ্তবয়স্কে সামান্য জ্বর"
       },
       "summary": {
-        "en": "Temperature 99–101°F. Common with viral infections, flu, or after vaccination.",
-        "bn": "তাপমাত্রা ৯৯-১০১°F। ভাইরাল সংক্রমণ, ফ্লু বা টিকার পর সাধারণ।"
+        "en": "Temperature 99–101°F. Commonly caused by self-limiting viral infections, flu, or post-vaccination.",
+        "bn": "তাপমাত্রা ৯৯-১০১°F। সাধারণত ভাইরাল সংক্রমণ, ফ্লু বা টিকার পর সাময়িক প্রতিক্রিয়া।"
       },
       "advice": {
-        "en": "Rest. Drink plenty of fluids. Paracetamol 500mg every 6 hours if needed — verify dose with a licensed doctor, especially if you have liver/kidney disease or are pregnant.",
-        "bn": "বিশ্রাম নিন। প্রচুর তরল পান করুন। প্রয়োজনে ৬ ঘণ্টা পরপর প্যারাসিটামল ৫০০ মিগ্রা — লিভার/কিডনির সমস্যা থাকলে বা গর্ভবতী হলে ডাক্তারের সাথে ডোজ যাচাই করুন।"
+        "en": "Rest. Maintain adequate hydration by drinking clean water, broth, or oral rehydration fluids. If uncomfortable, Paracetamol 500mg may be taken every 6 hours up to a maximum of 4 tablets (2g) per 24 hours. AVOID self-prescribing antibiotics or other painkillers like Ibuprofen/Diclofenac without professional evaluation.",
+        "bn": "বিশ্রাম নিন। প্রচুর নিরাপদ পানি বা তরল পান করুন। অস্বস্তি হলে প্যারাসিটামল ৫০০ মিগ্রা প্রতি ৬ ঘণ্টা পরপর খেতে পারেন (২৪ ঘণ্টায় সর্বোচ্চ ৪টি বা ২ গ্রাম)। ডাক্তারের পরামর্শ ছাড়া নিজে থেকে অ্যান্টিবায়োটিক বা অন্যান্য ব্যথানাশক (যেমন আইবুপ্রোফেন/ডাইক্লোফেনাক) খাবেন না।"
       },
       "seeDoctor": {
-        "en": "If fever lasts more than 3 days, goes above 102°F, or comes with rash, severe headache, vomiting, or breathing difficulty.",
-        "bn": "জ্বর ৩ দিনের বেশি, ১০২°F-এর বেশি, অথবা র‍্যাশ, তীব্র মাথাব্যথা, বমি, শ্বাসকষ্টের সাথে হলে ডাক্তার দেখান।"
+        "en": "Consult a doctor if fever lasts >3 days, exceeds 102°F, or is accompanied by warning signs: skin rash, persistent vomiting, severe headache, neck stiffness, or shortness of breath.",
+        "bn": "জ্বর ৩ দিনের বেশি স্থায়ী হলে, ১০২°F পার হলে, অথবা সাথে ত্বকে র‍্যাশ, ক্রমাগত বমি, তীব্র মাথাব্যথা, ঘাড় শক্ত হওয়া বা শ্বাসকষ্টের মতো বিপদ চিহ্ন দেখা দিলে ডাক্তার দেখান।"
       }
     },
     {
@@ -57,8 +57,8 @@
         "bn": "শিশুর তাপমাত্রা ১০২°F-এর বেশি হলে যত্নসহকারে নজরদারি, ১০৪°F-এর বেশি হলে জরুরি।"
       },
       "advice": {
-        "en": "Sponge with lukewarm water (never cold), light clothing, plenty of fluids/ORS. Paracetamol syrup by weight — confirm dose with a doctor or pharmacist; do NOT give aspirin to children.",
-        "bn": "হালকা গরম পানি দিয়ে সাবধানে স্পঞ্জ করুন (ঠান্ডা পানি নয়), পাতলা কাপড়, প্রচুর তরল/ORS। ওজন অনুযায়ী প্যারাসিটামল সিরাপ — ডাক্তার/ফার্মাসিস্টের সাথে যাচাই করুন; শিশুকে কখনই অ্যাসপিরিন দেবেন না।"
+        "en": "Sponge with lukewarm water (never cold), light clothing, plenty of fluids/ORS. Paracetamol syrup by weight — confirm dose with a doctor or pharmacist; do NOT give aspirin to children. Note: paracetamol eases discomfort but does NOT prevent febrile seizures — never exceed the weight-based dose to try to stop a fever.",
+        "bn": "হালকা গরম পানি দিয়ে সাবধানে স্পঞ্জ করুন (ঠান্ডা পানি নয়), পাতলা কাপড়, প্রচুর তরল/ORS। ওজন অনুযায়ী প্যারাসিটামল সিরাপ — ডাক্তার/ফার্মাসিস্টের সাথে যাচাই করুন; শিশুকে কখনই অ্যাসপিরিন দেবেন না। মনে রাখুন: প্যারাসিটামল অস্বস্তি কমায় কিন্তু খিঁচুনি (febrile seizure) প্রতিরোধ করে না — জ্বর কমানোর জন্য ওজন অনুযায়ী মাত্রার বেশি কখনো দেবেন না।"
       },
       "seeDoctor": {
         "en": "Go to hospital NOW if: infant under 3 months with any fever; child is unusually drowsy, not feeding, has stiff neck, seizure, rash that doesn't fade under pressure, or breathing trouble.",
@@ -275,12 +275,12 @@
         "bn": "বেশিরভাগ ডায়রিয়া ভাইরাল বা খাদ্যজনিত এবং ২-৩ দিনে সেরে যায়। মূল ঝুঁকি পানিশূন্যতা।"
       },
       "advice": {
-        "en": "Drink ORS after each loose motion. If ORS unavailable: 1 litre safe boiled water + a pinch of salt + a fistful of sugar. Eat light: rice, banana, plain bread. AVOID antibiotics and anti-diarrheal drugs unless prescribed.",
-        "bn": "প্রতি পাতলা পায়খানার পর ORS পান করুন। ORS না থাকলে: ১ লিটার ফোটানো পানিতে এক চিমটি লবণ + এক মুঠো চিনি। হালকা খাবার: ভাত, কলা, রুটি। ডাক্তারের পরামর্শ ছাড়া অ্যান্টিবায়োটিক বা ডায়রিয়া বন্ধের ওষুধ এড়িয়ে চলুন।"
+        "en": "Drink standard Oral Rehydration Salts (ORS) solution continuously after every loose motion. Critical WHO Emergency Formulation if packets are fully absent: Dissolve exactly 6 level teaspoons of sugar and 0.5 level teaspoon of salt into 1 Liter of clean, boiled-and-cooled water. AVOID imprecise measurements like hand-fistfuls as excessive sugar exacerbates hyperosmolar osmotic diarrhea. Do NOT take anti-motility drugs (like Loperamide) or self-prescribe antibiotics without a clinical indication.",
+        "bn": "প্রতিবার পাতলা পায়খানার পর নিয়ম মেনে খাবার স্যালাইন (ORS) পান করুন। ওআরএস প্যাকেট একেবারেই না থাকলে জরুরি বিকল্প (WHO অনুমোদিত): ১ লিটার ফোটানো ঠান্ডা পানিতে ঠিক ৬ চা চামচ চিনি এবং আধা চা চামচ খাবার লবণ ভালোভাবে মিশিয়ে নিন। হাতের আন্দাজে বা 'এক মুঠো' মাপে চিনি দেবেন না, কারণ অতিরিক্ত চিনি অন্ত্রে পানি টেনে নিয়ে ডায়রিয়া মারাত্মকভাবে বাড়িয়ে দেয়। ডাক্তারের পরামর্শ ছাড়া মল বন্ধ করার ওষুধ বা অ্যান্টিবায়োটিক খাবেন না।"
       },
       "seeDoctor": {
-        "en": "Go to hospital if: blood in stool, high fever, severe abdominal pain, signs of dehydration (dry mouth, no urine for 8h, dizziness), or symptoms last >3 days.",
-        "bn": "হাসপাতালে যান যদি: মলে রক্ত, উচ্চ জ্বর, তীব্র পেট ব্যথা, পানিশূন্যতার লক্ষণ (শুকনো মুখ, ৮ ঘণ্টা প্রস্রাব নেই, মাথা ঘোরা), বা ৩ দিনের বেশি স্থায়ী।"
+        "en": "Seek immediate emergency hospital medical care if you observe severe danger signs: blood in the stool (dysentery), persistent high fever, severe unremitting abdominal pain, or signs of hypovolemic shock (sunken eyes, extreme thirst, dry mouth, or absence of urination for over 8 hours).",
+        "bn": "নিচের বিপদ চিহ্নগুলো দেখা দিলে অবিলম্বে হাসপাতালে যান: মলে রক্ত (আমাশয়), টানা উচ্চ জ্বর, পেটে তীব্র অবিরাম ব্যথা, অথবা তীব্র পানিশূন্যতার লক্ষণ (চোখ বসে যাওয়া, প্রচণ্ড তৃষ্ণা, শুকনো মুখ, বা টানা ৮ ঘণ্টার বেশি প্রস্রাব না হওয়া)।"
       }
     },
     {
@@ -337,8 +337,8 @@
         "bn": "মুখে স্যালাইন ডায়রিয়াজনিত পানিশূন্যতা প্রতিরোধ ও চিকিৎসা করে।"
       },
       "advice": {
-        "en": "Packet ORSaline-N: dissolve 1 packet in 500 ml safe (boiled & cooled) water. Home recipe if no packet: 1 litre safe water + 1/2 teaspoon salt (one pinch with three fingers) + 6 level teaspoons sugar (one fist). Drink slowly after each loose motion or vomit.",
-        "bn": "প্যাকেট ORStaline-N: ১ প্যাকেট ৫০০ মিলি ফোটানো ঠান্ডা পানিতে গুলিয়ে দিন। প্যাকেট না থাকলে বাড়িতে: ১ লিটার নিরাপদ পানিতে ১/২ চা চামচ লবণ (তিন আঙুলে এক চিমটি) + ৬ চা চামচ চিনি (এক মুঠো)। প্রতি পাতলা পায়খানা বা বমির পর ধীরে ধীরে খাওয়ান।"
+        "en": "Packet ORS (e.g. ORSaline-N): dissolve 1 packet in the exact water volume printed on the packet (usually 500 ml safe, boiled-and-cooled water). Home recipe ONLY if no packet is available: 1 litre clean water + exactly 6 level teaspoons of sugar + 0.5 level teaspoon of salt. Use a measuring spoon — never guess with 'a fist' or 'a pinch', because too much sugar worsens diarrhea. Drink slowly after each loose motion or vomit.",
+        "bn": "প্যাকেট ORS (যেমন ORSaline-N): প্যাকেটে লেখা সঠিক পরিমাণ পানিতে (সাধারণত ৫০০ মিলি ফোটানো ঠান্ডা নিরাপদ পানি) ১ প্যাকেট গুলে নিন। প্যাকেট না থাকলে কেবল তখনই ঘরোয়া রেসিপি: ১ লিটার পরিষ্কার পানিতে ঠিক ৬ চা চামচ চিনি ও আধা চা চামচ লবণ। মাপার চামচ ব্যবহার করুন — 'এক মুঠো' বা 'এক চিমটি' আন্দাজে দেবেন না, কারণ বেশি চিনি ডায়রিয়া বাড়িয়ে দেয়। প্রতিবার পাতলা পায়খানা বা বমির পর ধীরে ধীরে পান করুন।"
       },
       "seeDoctor": {
         "en": "If patient can't keep ORS down, very weak, or no urine for 8+ hours.",
@@ -429,8 +429,8 @@
         "bn": "চাপ-চাপ বুকে ব্যথা, বাঁ হাত/চোয়াল/পিঠে ছড়ানো, ঘাম বা শ্বাসকষ্টসহ — প্রমাণ না হওয়া পর্যন্ত হার্ট অ্যাটাক।"
       },
       "advice": {
-        "en": "Sit or lie half-up. Loosen clothes. If known heart patient already on aspirin, may chew 1 aspirin 300mg. Otherwise no new medicine.",
-        "bn": "বসুন বা আধ-শোয়া অবস্থায় থাকুন। কাপড় ঢিলে করুন। আগে থেকেই অ্যাসপিরিন নিচ্ছেন এমন হার্ট রোগী হলে ১টি অ্যাসপিরিন ৩০০ মিগ্রা চিবাতে পারেন। অন্যথায় নতুন কোনো ওষুধ নয়।"
+        "en": "Stop all physical activity immediately. Sit or rest in a half-upright position to ease breathing. Loosen tight clothing. If the patient has a known history of coronary artery disease and has been previously prescribed Aspirin by a doctor, they may chew one low-dose Aspirin (75mg-150mg). Do NOT administer Aspirin if the patient has an active stomach ulcer, bleeding disorder, or known aspirin allergy.",
+        "bn": "সব ধরনের শারীরিক পরিশ্রম অবিলম্বে বন্ধ করুন। শ্বাসপ্রশ্বাস সহজ করতে আধ-শোয়া অবস্থায় আরাম করে বসুন। জামাকাপড় ঢিলে করুন। রোগীর আগে থেকে হার্টের রোগ জানা থাকলে এবং পূর্বে ডাক্তারের নির্দেশ থাকলে একটি অ্যাসপিরিন (৭৫ মিগ্রা - ১৫০ মিগ্রা) চিবিয়ে খেতে পারেন। সক্রিয় আলসার, রক্তক্ষরণজনিত সমস্যা বা অ্যাসপিরিনে অ্যালার্জি থাকলে এটি দেবেন না।"
       },
       "seeDoctor": {
         "en": "Call 999 immediately or go to the nearest hospital with cardiac care. Every minute matters.",
@@ -463,8 +463,8 @@
         "bn": "FAST: Face (মুখ বাঁকা), Arm (হাত দুর্বল), Speech (কথা জড়ানো), Time (৯৯৯-এ কল)। প্রতি মিনিটে মস্তিষ্কের কোষ মরছে।"
       },
       "advice": {
-        "en": "Lie patient flat with head slightly raised. Loosen clothing. Note the time symptoms began — doctors need this. Do NOT give food, water, or medicine.",
-        "bn": "রোগীকে সমতলে শোয়ান, মাথা সামান্য উঁচু। কাপড় ঢিলে করুন। লক্ষণ শুরুর সময় মনে রাখুন — ডাক্তারের দরকার। কোনো খাবার, পানি বা ওষুধ দেবেন না।"
+        "en": "If the patient is conscious, keep them resting flat with the head elevated slightly at a 15-30 degree angle. CRITICAL: If the patient is unresponsive, drowsy, or vomiting, place them immediately onto their side in the Recovery Position to keep the airway clear and prevent aspiration. Do NOT give any food, water, or oral medications, as swallowing may be impaired.",
+        "bn": "রোগী সচেতন থাকলে মাথা সামান্য ১৫-৩০ ডিগ্রি উঁচুতে রেখে সমতলে শুইয়ে রাখুন। অত্যন্ত জরুরি: রোগী অচেতন, তন্দ্রাচ্ছন্ন বা বমি করলে শ্বাসনালী পরিষ্কার রাখতে এবং বমি ফুসফুসে ঢুকে যাওয়া আটকাতে তাকে অবিলম্বে বাম বা ডান কাত করে (রিকভারি পজিশন) শোয়ান। মুখে কোনো খাবার, পানি বা ওষুধ দেবেন না; গিলতে সমস্যা হয়ে দম আটকে যেতে পারে।"
       },
       "seeDoctor": {
         "en": "Call 999 or rush to a hospital with stroke unit IMMEDIATELY. Treatment within 4.5 hours of onset gives best recovery.",
@@ -617,8 +617,8 @@
         "bn": "বাংলাদেশের গ্রামাঞ্চলে সাধারণ, বিশেষত বর্ষায়। প্রমাণ না হওয়া পর্যন্ত বিষাক্ত ভাবুন। উপজেলা স্বাস্থ্য কমপ্লেক্সে অ্যান্টি-ভেনম বিনামূল্যে।"
       },
       "advice": {
-        "en": "Keep patient still and calm — movement spreads venom. Immobilise the bitten limb at heart level, like a splinted fracture. Remove tight items (rings, watches). Do NOT cut, suck, apply ice, or use tourniquets. Do NOT give alcohol or random herbs.",
-        "bn": "রোগীকে স্থির ও শান্ত রাখুন — নড়াচড়ায় বিষ ছড়ায়। আক্রান্ত অঙ্গকে হার্টের সমান উচ্চতায় ফ্র্যাকচারের মতো বেঁধে রাখুন। আঁটসাঁট জিনিস খুলুন (আংটি, ঘড়ি)। কাটবেন না, চুষবেন না, বরফ দেবেন না, রক্ত প্রবাহ আটকাবেন না। মদ বা যেকোনো গাছগাছড়া দেবেন না।"
+        "en": "Keep the patient entirely calm and completely still; muscle movement accelerates venom spread through the lymphatic system. Immobilize the bitten limb using a rigid splint (bamboo or wood padded with cloth) and keep the limb resting BELOW the level of the heart. Remove tight rings, bangles, or clothing before swelling starts. NEVER cut the wound, attempt to suck out venom, apply ice, or tie tight arterial tourniquets.",
+        "bn": "রোগীকে সম্পূর্ণ শান্ত ও স্থির রাখুন; নড়াচড়া করলে লিম্ফ্যাটিক সিস্টেমের মাধ্যমে বিষ দ্রুত শরীরে ছড়ায়। কামড়ানো অঙ্গটি একটি সোজা কাঠ বা বাঁশের চটা দিয়ে কাপড়ের মাধ্যমে ফ্র্যাকচারের মতো বেঁধে স্থির করুন এবং অঙ্গটি অবশ্যই হার্টের স্তরের নিচে রাখুন। ফোলা শুরু হওয়ার আগেই হাতের আংটি, চুড়ি বা আঁটসাঁট পোশাক খুলে ফেলুন। ক্ষতস্থান কখনোই কাটবেন না, মুখ দিয়ে বিষ চুষবেন না, বরফ দেবেন না বা শক্ত করে রক্তচলাচল বন্ধ করার মতো বাঁধন দেবেন না।"
       },
       "seeDoctor": {
         "en": "Rush to upazila health complex or hospital immediately. Take a photo of the snake if safe — helps identification. Anti-venom works best within 4 hours.",

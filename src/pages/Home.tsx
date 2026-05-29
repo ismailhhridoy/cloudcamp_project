@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/LanguageContext.tsx";
 import { useState, useEffect } from "react";
 import { getDailyTip, type DailyTip } from "../lib/healthTips.ts";
+import { OfflineAiCard } from "../components/OfflineAiCard.tsx";
+import { InstallButton } from "../components/InstallButton.tsx";
 
 const SLIDES = [
   {
@@ -185,6 +187,8 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
               { titleKey: 'home.why.f3.title', descKey: 'home.why.f3.desc' },
               { titleKey: 'home.why.f4.title', descKey: 'home.why.f4.desc' },
               { titleKey: 'home.why.f5.title', descKey: 'home.why.f5.desc' },
+              { titleKey: 'home.why.f6.title', descKey: 'home.why.f6.desc' },
+              { titleKey: 'home.why.f7.title', descKey: 'home.why.f7.desc' },
             ].map((row, i) => (
               <div key={i} className="flex gap-4">
                 <div className="w-4 h-4 rounded-full bg-emerald-100 border-2 border-white shadow-sm shrink-0 mt-1" />
@@ -195,6 +199,12 @@ export function HomePage({ onNavigate }: { onNavigate: (tab: string) => void }) 
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Make the AI work offline — one-tap download (shared card with Settings) */}
+      <section className="px-6 lg:px-0 space-y-3">
+        <InstallButton />
+        <OfflineAiCard />
       </section>
 
       {/* Daily Health Tip (live, weather + profile aware) */}

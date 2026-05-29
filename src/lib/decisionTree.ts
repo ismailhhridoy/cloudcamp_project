@@ -12,15 +12,25 @@ export interface DecisionResult {
 }
 
 const HEADER_EN: Record<KbEntry["severity"], string> = {
-  critical: "**🚨 GO TO HOSPITAL NOW**",
-  urgent: "**⚠️ See a doctor today**",
-  mild: "**🏠 FIRST-AID AT HOME**",
+  critical: "**🚨 EMERGENCY: GO TO THE NEAREST HOSPITAL IMMEDIATELY**",
+  urgent: "**⚠️ MEDICAL EVALUATION REQUIRED TODAY**",
+  mild: "**🏠 REST & SUPPORTIVE FIRST-AID AT HOME**",
 };
 const HEADER_BN: Record<KbEntry["severity"], string> = {
-  critical: "**🚨 এখনই হাসপাতালে যান**",
-  urgent: "**⚠️ আজই ডাক্তার দেখান**",
-  mild: "**🏠 বাড়িতে প্রাথমিক চিকিৎসা**",
+  critical: "**🚨 জরুরি অবস্থা: অবিলম্বে নিকটস্থ হাসপাতালে যান**",
+  urgent: "**⚠️ আজই ডাক্তারের পরামর্শ নিন**",
+  mild: "**🏠 বাড়িতে প্রাথমিক পরিচর্যা ও পর্যবেক্ষণ**",
 };
+
+// The seeDoctor label is severity-aware: critical/urgent use emergency wording, but a mild entry
+// (e.g. "consult if fever lasts >3 days") would be over-stated by "emergency" framing, so it gets
+// the calmer "When to see a doctor" label.
+function seeDoctorLabel(severity: KbEntry["severity"], lang: "en" | "bn"): string {
+  if (severity === "mild") {
+    return lang === "bn" ? "কখন ডাক্তার দেখাবেন:" : "When to see a doctor:";
+  }
+  return lang === "bn" ? "কখন অবিলম্বে জরুরি বিভাগে যাবেন:" : "When to seek immediate emergency care:";
+}
 
 function formatEntry(entry: KbEntry, lang: "en" | "bn"): string {
   const header = (lang === "bn" ? HEADER_BN : HEADER_EN)[entry.severity];
@@ -33,7 +43,7 @@ function formatEntry(entry: KbEntry, lang: "en" | "bn"): string {
     "",
     entry.advice[lang],
     "",
-    `**${lang === "bn" ? "কখন ডাক্তার দেখাবেন:" : "When to see a doctor:"}**`,
+    `**${seeDoctorLabel(entry.severity, lang)}**`,
     entry.seeDoctor[lang],
   ].join("\n");
 }
@@ -41,20 +51,20 @@ function formatEntry(entry: KbEntry, lang: "en" | "bn"): string {
 // First-turn clarifying questions tied to a KB entry id. If a match isn't in this map we fall
 // back to a generic onset / severity question.
 const CLARIFY_QUESTIONS: Record<string, { en: string; bn: string }> = {
-  "fever-adult-mild": { en: "How many days have you had the fever? What is the temperature? Any rash, vomiting, or breathing difficulty?", bn: "কত দিন ধরে জ্বর? তাপমাত্রা কত? র‍্যাশ, বমি বা শ্বাসকষ্ট আছে?" },
+  "fever-adult-mild": { en: "How many days has the fever lasted? Is the temperature above 102°F? Are you experiencing an unexplained rash, persistent vomiting, or any chest discomfort/breathing issues?", bn: "জ্বর কতদিন ধরে? তাপমাত্রা কি ১০২°F এর বেশি? শরীরে কোনো র‍্যাশ, ক্রমাগত বমি, বা বুকে ব্যথা/শ্বাসকষ্ট আছে কি?" },
   "fever-child-high": { en: "How old is the child? What is the temperature? Are they alert and feeding? Any rash or neck stiffness?", bn: "শিশুর বয়স কত? তাপমাত্রা কত? সচেতন আছে ও খাচ্ছে কি? র‍্যাশ বা ঘাড় শক্ত?" },
   "fever-infant": { en: "How many months old? What is the temperature? Is the baby alert and feeding normally?", bn: "শিশুর বয়স কত মাস? তাপমাত্রা কত? শিশু সচেতন ও স্বাভাবিক খাচ্ছে?" },
   "cold-runny-nose": { en: "How many days? Any fever, ear pain, or thick coloured discharge?", bn: "কত দিন ধরে? জ্বর, কানে ব্যথা, বা ঘন রঙিন শ্লেষ্মা আছে?" },
   "cough-persistent": { en: "How long have you had this cough? Any blood, weight loss, or night sweats?", bn: "কত দিন ধরে কাশি? রক্ত, ওজন কমা, বা রাতে ঘাম আছে?" },
   "headache-mild": { en: "How long does each headache last? On a scale of 1–10 how bad? Anything that brings it on?", bn: "প্রতিবার মাথাব্যথা কতক্ষণ থাকে? ১-১০-এ কত তীব্র? কী কারণে শুরু হয়?" },
   "headache-severe-sudden": { en: "Did it start suddenly like an explosion? Any vomiting, neck stiffness, vision change, or weakness on one side?", bn: "হঠাৎ বিস্ফোরণের মতো শুরু হয়েছে কি? বমি, ঘাড় শক্ত, দৃষ্টি পরিবর্তন, বা এক পাশ দুর্বল?" },
-  "diarrhea-adult": { en: "How many loose motions today? Any blood, fever, or signs of dehydration?", bn: "আজ কতবার পাতলা পায়খানা হয়েছে? রক্ত, জ্বর, বা পানিশূন্যতার লক্ষণ আছে?" },
-  "chest-pain": { en: "When did the pain start? Is it crushing/pressing or sharp? Does it spread to your arm, jaw, or back? Are you sweating or short of breath?", bn: "ব্যথা কখন শুরু হয়েছে? চাপ-চাপ নাকি ছুরির মতো? হাত, চোয়াল বা পিঠে ছড়াচ্ছে? ঘাম বা শ্বাসকষ্ট আছে?" },
-  "stroke": { en: "Is one side of the face drooping? Can the person raise both arms equally? Is their speech slurred? When did it start?", bn: "মুখের এক পাশ বাঁকা? দুই হাত সমানভাবে তুলতে পারছে? কথা জড়াচ্ছে? কখন শুরু হয়েছে?" },
+  "diarrhea-adult": { en: "Are there signs of blood or mucus in the stool? Do you have a high fever? How many hours has it been since you last urinated?", bn: "মলে কি রক্ত বা আমাশয়ের লক্ষণ আছে? তীব্র জ্বর আছে কি? শেষ কত ঘণ্টা আগে প্রস্রাব হয়েছে?" },
+  "chest-pain": { en: "Is the pain a crushing or heavy sensation? Does it radiate to your left arm, jaw, or back? Are you experiencing cold sweating, nausea, or shortness of breath?", bn: "ব্যথাটি কি বুকে ভারী চাপ বা মোচড় দেওয়ার মতো অনুভূত হচ্ছে? এটি কি বাম হাত, চোয়াল বা পিঠে ছড়িয়ে পড়ছে? সাথে অতিরিক্ত ঠান্ডা ঘাম, বমি ভাব বা শ্বাসকষ্ট আছে?" },
+  "stroke": { en: "Is there sudden weakness/numbness on one side of the body? Is the face drooping when smiling? Is speech slurred or difficult to understand?", bn: "শরীরের কোনো এক পাশ কি হঠাৎ দুর্বল বা অবশ হয়ে গেছে? হাসতে গেলে মুখ কি একদিকে বেঁকে যাচ্ছে? কথা কি জড়িয়ে যাচ্ছে বা বলতে কষ্ট হচ্ছে?" },
   "breathing-difficulty": { en: "When did it start? Can you speak full sentences? Are your lips or fingertips turning blue?", bn: "কখন শুরু হয়েছে? পুরো বাক্য বলতে পারছেন? ঠোঁট বা আঙুল নীল হয়ে যাচ্ছে?" },
   "asthma-attack": { en: "Have you used your reliever inhaler? How many puffs already? Any change after 10 minutes?", bn: "রিলিভার ইনহেলার ব্যবহার করেছেন? কতবার নিয়েছেন? ১০ মিনিট পর কোনো পরিবর্তন?" },
   "dengue": { en: "How many days of fever? Any pain behind the eyes, joint pain, rash, gum bleeding, or vomiting?", bn: "কত দিন ধরে জ্বর? চোখের পিছনে ব্যথা, জয়েন্টে ব্যথা, র‍্যাশ, মাড়ি দিয়ে রক্ত, বা বমি আছে?" },
-  "snake-bite": { en: "Where on the body was the bite? When did it happen? Did you see the snake?", bn: "শরীরের কোথায় কামড়েছে? কখন হয়েছে? সাপটি দেখেছেন?" },
+  "snake-bite": { en: "What time did the bite occur? Is the affected limb being kept completely still and positioned below heart level? Are there symptoms like droopy eyelids or difficulty swallowing?", bn: "সাপ কখন কামড়েছে? আক্রান্ত অঙ্গটি কি সম্পূর্ণ নাড়াচড়া না করে হার্টের স্তরের নিচে রাখা হয়েছে? চোখের পাতা নেমে আসা বা গিলতে কোনো সমস্যা হচ্ছে?" },
   "pregnancy-bleeding": { en: "How many weeks pregnant? How heavy is the bleeding — spotting or soaking a pad? Any pain?", bn: "কত সপ্তাহ গর্ভবতী? রক্তক্ষরণ কত — সামান্য নাকি প্যাড ভেজানো? ব্যথা আছে?" },
   // Newly added rural-BD protocols.
   "postpartum-bleeding": { en: "How long since delivery? How many pads soaked per hour? Is she dizzy, pale, or fainting?", bn: "প্রসবের কতক্ষণ পর? এক ঘণ্টায় কতটি প্যাড ভিজছে? মাথা ঘোরা, ফ্যাকাশে বা অজ্ঞান হচ্ছে?" },
